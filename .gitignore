@@ -1,0 +1,14 @@
+# areas with their own repo
+01-Tasks/*
+02-Projects/*/*
+03-Uni/*
+04-Skills/*
+!*/README.md
+!02-Projects/*/README.md
+
+# never in Git
+90-Work/
+91-Private/
+*.hc
+
+__pycache__/

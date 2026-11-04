@@ -1,0 +1,39 @@
+# CLAUDE.md — AI master directory
+
+One directory for all AI-assisted work: tasks, projects, study, skills, and the knowledge base
+agents retrieve from. Where an area has its own `CLAUDE.md`, that file wins inside it.
+
+## 1. Areas
+
+| Folder | Holds | Own Git repo? |
+|---|---|---|
+| `01-Tasks/` | Agent tasks: research, plans, reviews — one task, one folder | yes |
+| `02-Projects/01-Public/` | Projects that are or may become public; nothing private in them | one per project |
+| `02-Projects/02-Private/` | All other projects | one per project |
+| `03-Uni/` | Study material and papers | yes |
+| `04-Skills/` | Claude Code skills, as a plugin marketplace | yes |
+| `05-Knowledge/` | Knowledge base for retrieval (vector database), see its README | root repo |
+| `90-Work/` | Work data, VeraCrypt container only — **local models only** | never in Git |
+| `91-Private/` | Sensitive personal data — **no agent at all** | never in Git |
+
+## 2. Access rules
+
+Enforced by `.claude/hooks/local-only-guard.py`, registered in the user-level
+`~/.claude/settings.json`, so it holds in every Claude Code session on the machine.
+
+- **`90-Work/` and drive `W:`** (the mounted VeraCrypt volume): blocked for any session that
+  runs against a cloud model. Allowed only when `ANTHROPIC_BASE_URL` points at localhost.
+  A cloud session that starts while `W:` is mounted shows a warning.
+- **`91-Private/`**: blocked for every agent, local ones included.
+- **Raw data** (`_raw/`, `_rohdaten/`, `Quellen/`, anywhere): new files may be added, existing
+  ones are never edited or overwritten.
+
+A block is final. Do not look for another route to the same files (a variable, a parent-folder
+glob, another tool); tell the user what you needed instead. The hook only matches paths written
+out in a call, so keeping to the rule is on you, not on the hook.
+
+## 3. Git
+
+The root is a slim repo: this file, `README.md`, `.claude/`, `05-Knowledge/`. Areas with their
+own repo, and `90-Work/` and `91-Private/`, are in `.gitignore`, so nested repos stay
+independent and work data never reaches a remote. Commit messages describe the substance.
