@@ -10,8 +10,12 @@ Suggested setup:
 - **Engine:** LanceDB, embedded. Each index is one folder.
 - **Embedding:** a multilingual model run in-process (e.g. EmbeddingGemma via Transformers.js),
   no separate model server. Changing the model means a new index folder.
-- **Updates:** `sync` re-embeds changed files and drops deleted ones; run by hand or on a
-  schedule.
+- **Updates:** `watcher.py` (Python 3, stdlib only, Windows/Linux/macOS) scans each
+  instance's folders every few minutes and runs `sync` only where files changed. It skips an
+  instance whose folder is missing (an unmounted volume would otherwise be wiped from the
+  index), keeps itself the only writer with a lock file, and lists JSON/HTML in raw folders
+  that have no Markdown version yet. Configure it in `instances.json` (copy
+  `instances.example.json`), run it with `python3 watcher.py` at login.
 - **Agents:** stdio MCP server, registered in Claude Code and in local-model clients.
 - **Layout:** documents in `docs/`, index in `.index/`, model cache in `.models/`; the last two
   stay out of Git.

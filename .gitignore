@@ -12,3 +12,10 @@
 *.hc
 
 __pycache__/
+
+# knowledge base: index, model cache, watcher state, OCR cache, per-machine config
+05-Knowledge/.index/
+05-Knowledge/.models/
+05-Knowledge/.state/
+05-Knowledge/.derived-cache/
+05-Knowledge/instances.json

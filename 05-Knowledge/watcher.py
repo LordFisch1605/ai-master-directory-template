@@ -1,0 +1,232 @@
+"""Knowledge-base watcher: keeps every mcp-local-rag index in step with its folders.
+
+  python watcher.py            poll forever (every interval_seconds)
+  python watcher.py --once     one pass, then exit
+
+Python 3 standard library only; Windows, Linux, macOS. Needs Node (npx) for mcp-local-rag.
+Config: instances.json next to this file (per machine, not in Git; see instances.example.json).
+
+Per instance and pass:
+  1. Resolve the roots: "roots" as given, plus every folder named in "discover.dirs" found
+     under "discover.under" (e.g. all _raw/ folders).
+  2. If any root is missing (volume not mounted, folder moved): skip the instance. A sync
+     without a root would delete that root's files from the index.
+  3. Snapshot: path, size and mtime of every indexable file not matched by "ignore".
+     Unchanged since the last successful sync: nothing to do.
+  4. Otherwise take the instance's lock (one writer per index) and run
+     `npx -y <package> sync`; record the snapshot only when the sync succeeded.
+Raw folders: JSON/HTML in a _raw/ (or _rohdaten/) with neither a Markdown version in the
+sibling _derived/ nor a line in _derived/.skipped is listed in .state/unconverted.txt.
+State and log live in .state/ (not in Git).
+"""
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+STATE = HERE / ".state"
+INDEXABLE = {".md", ".txt", ".pdf", ".docx"}
+CONVERTIBLE = {".json", ".html", ".htm"}
+LOCK_STALE_SECONDS = 24 * 3600  # a first sync with PDF captions can take hours
+SKIP_DIRS = {".git", "node_modules"}  # never documents, and slow to walk every pass
+
+
+def log(msg):
+    STATE.mkdir(exist_ok=True)
+    line = f"{datetime.now():%Y-%m-%d %H:%M:%S} {msg}"
+    print(line, flush=True)
+    path = STATE / "watcher.log"
+    if path.exists() and path.stat().st_size > 1_000_000:
+        path.replace(STATE / "watcher.log.1")
+    with path.open("a", encoding="utf-8") as f:
+        f.write(line + "\n")
+
+
+def expand(p):
+    return Path(os.path.expandvars(os.path.expanduser(p)))
+
+
+def glob_regex(pattern):
+    """mcp-local-rag IGNORE_PATHS semantics: relative to the root, '/' separators,
+    * and ** do not match names starting with '.'."""
+    out, i = "", 0
+    while i < len(pattern):
+        if pattern.startswith("**/", i):
+            out += r"(?:(?!\.)[^/]*/)*"
+            i += 3
+        elif pattern.startswith("**", i):
+            out += r"(?:(?!\.)[^/]*(?:/(?!\.)[^/]*)*)?"
+            i += 2
+        elif pattern[i] == "*":
+            out += r"(?!\.)[^/]*"
+            i += 1
+        elif pattern[i] == "?":
+            out += r"[^/]"
+            i += 1
+        else:
+            out += re.escape(pattern[i])
+            i += 1
+    return re.compile(out + r"\Z")
+
+
+def walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+        for name in filenames:
+            yield Path(dirpath) / name
+
+
+def roots_of(inst):
+    roots = [expand(r) for r in inst.get("roots", [])]
+    disc = inst.get("discover")
+    if disc:
+        names = set(disc["dirs"])
+        for base in map(expand, disc["under"]):
+            if not base.is_dir():
+                roots.append(base)  # reported as missing below
+                continue
+            for dirpath, dirnames, _ in os.walk(base):
+                dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
+                for d in [d for d in dirnames if d in names]:
+                    roots.append(Path(dirpath) / d)
+                    dirnames.remove(d)  # a raw folder's own subfolders belong to it
+    return sorted(set(roots))
+
+
+def snapshot(roots, ignore):
+    pats = [glob_regex(p) for p in ignore]
+    h = hashlib.sha256()
+    count = 0
+    for root in roots:
+        h.update(f"root:{root}\n".encode())
+        for f in sorted(walk(root)):
+            if f.suffix.lower() not in INDEXABLE:
+                continue
+            rel = f.relative_to(root).as_posix()
+            if any(p.match(rel) for p in pats):
+                continue
+            st = f.stat()
+            h.update(f"{rel}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
+            count += 1
+    return h.hexdigest(), count
+
+
+def acquire(lock):
+    try:
+        fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError:
+        if time.time() - lock.stat().st_mtime < LOCK_STALE_SECONDS:
+            return False
+        lock.unlink()  # left behind by a crashed run
+        return acquire(lock)
+    os.write(fd, str(os.getpid()).encode())
+    os.close(fd)
+    return True
+
+
+def sync(name, inst, cfg, roots):
+    db = expand(inst["db"])
+    db.mkdir(parents=True, exist_ok=True)
+    env = {k: v for k, v in os.environ.items() if k not in ("BASE_DIR", "IGNORE_PATHS")}
+    # folders the snapshot skips must be kept out of the index too, or changes there go unseen
+    env["IGNORE_PATHS"] = json.dumps(inst.get("ignore", []) + [f"**/{d}/**" for d in sorted(SKIP_DIRS)])
+    env.update({
+        "BASE_DIRS": json.dumps([str(r) for r in roots]),
+        "DB_PATH": str(db),
+        "CACHE_DIR": str(expand(cfg["cache_dir"])),
+        "MODEL_NAME": cfg["model"],
+    })
+    cmd = [shutil.which("npx") or "npx", "-y", cfg["package"], "sync"]
+    if inst.get("visual"):
+        cmd += ["--visual", "--visual-quality", inst["visual"]]
+    started = time.time()
+    r = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
+    log(f"{name}: sync exit {r.returncode} after {time.time() - started:.0f}s | " + " | ".join(tail))
+    return r.returncode == 0
+
+
+def unconverted(roots):
+    found = []
+    for root in roots:
+        if root.name not in ("_raw", "_rohdaten"):
+            continue
+        derived = root.parent / "_derived"
+        skip_file = derived / ".skipped"
+        skipped = set()
+        if skip_file.exists():
+            for line in skip_file.read_text(encoding="utf-8").splitlines():
+                line = line.split("#", 1)[0].strip()
+                if line:
+                    skipped.add(line.replace("\\", "/"))
+        for f in walk(root):
+            if f.suffix.lower() in CONVERTIBLE:
+                rel = f.relative_to(root).as_posix()
+                if rel not in skipped and not (derived / (rel + ".md")).exists():
+                    found.append(str(f))
+    return found
+
+
+def run_pass(cfg):
+    STATE.mkdir(exist_ok=True)
+    state_file = STATE / "snapshots.json"
+    state = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
+    open_items = []
+    for name, inst in cfg["instances"].items():
+        roots = roots_of(inst)
+        missing = [str(r) for r in roots if not r.is_dir()]
+        if missing:
+            if state.get(f"{name}:missing") != missing:
+                log(f"{name}: skipped, missing root(s): {', '.join(missing)}")
+            state[f"{name}:missing"] = missing
+            continue
+        state.pop(f"{name}:missing", None)
+        if inst.get("report_unconverted"):
+            open_items += unconverted(roots)
+        digest, count = snapshot(roots, inst.get("ignore", []))
+        if state.get(name) == digest:
+            continue
+        lock = expand(inst["db"]).with_suffix(".lock")
+        lock.parent.mkdir(parents=True, exist_ok=True)
+        if not acquire(lock):
+            log(f"{name}: index busy (lock {lock}), next pass")
+            continue
+        try:
+            log(f"{name}: change detected ({count} files in {len(roots)} roots), syncing")
+            if sync(name, inst, cfg, roots):
+                state[name] = digest
+        finally:
+            lock.unlink(missing_ok=True)
+    state_file.write_text(json.dumps(state, indent=1), encoding="utf-8")
+    report = STATE / "unconverted.txt"
+    previous = report.read_text(encoding="utf-8") if report.exists() else ""
+    current = "".join(f + "\n" for f in sorted(open_items))
+    if current != previous:
+        report.write_text(current, encoding="utf-8")
+        log(f"unconverted JSON/HTML in raw folders: {len(open_items)} (list: {report})")
+
+
+def main():
+    cfg = json.loads((HERE / "instances.json").read_text(encoding="utf-8"))
+    once = "--once" in sys.argv
+    every = "one pass" if once else "every %ss" % cfg["interval_seconds"]
+    log("watcher started (%s)" % every)
+    while True:
+        try:
+            run_pass(cfg)
+        except Exception as exc:  # keep watching; the next pass may succeed
+            log(f"pass failed: {exc!r}")
+        if once:
+            return
+        time.sleep(cfg["interval_seconds"])
+
+
+if __name__ == "__main__":
+    main()
