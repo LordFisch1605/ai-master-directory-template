@@ -15,7 +15,11 @@ Suggested setup:
   instance whose folder is missing (an unmounted volume would otherwise be wiped from the
   index), keeps itself the only writer with a lock file, and lists JSON/HTML in raw folders
   that have no Markdown version yet. Configure it in `instances.json` (copy
-  `instances.example.json`), run it with `python3 watcher.py` at login.
+  `instances.example.json`), or per OS in `instances.windows.json` / `instances.linux.json` /
+  `instances.macos.json`, so a dual-boot machine can share one checkout; run it with
+  `python3 watcher.py` at login. `device` picks `cpu` or the GPU backend: `dml` (Windows),
+  `cuda` (Linux x64), `coreml` (macOS). An index stores absolute paths, so it belongs to one
+  OS; give each OS its own `db` paths.
 - **Agents:** stdio MCP server, registered in Claude Code and in local-model clients.
 - **Layout:** documents in `docs/`, index in `.index/`, model cache in `.models/`; the last two
   stay out of Git.

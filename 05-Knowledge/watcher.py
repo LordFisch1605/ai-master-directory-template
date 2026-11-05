@@ -4,7 +4,9 @@
   python watcher.py --once     one pass, then exit
 
 Python 3 standard library only; Windows, Linux, macOS. Needs Node (npx) for mcp-local-rag.
-Config: instances.json next to this file (per machine, not in Git; see instances.example.json).
+Config: instances.<os>.json (os = windows, linux, macos) next to this file if it exists, else
+instances.json; per machine, not in Git (see instances.example.json). The per-OS name lets two
+systems on one dual-boot machine share this folder with their own paths and devices.
 
 Per instance and pass:
   1. Resolve the roots: "roots" as given, plus every folder named in "discover.dirs" found
@@ -17,7 +19,7 @@ Per instance and pass:
      `npx -y <package> sync`; record the snapshot only when the sync succeeded.
 Raw folders: JSON/HTML in a _raw/ (or _rohdaten/) with neither a Markdown version in the
 sibling _derived/ nor a line in _derived/.skipped is listed in .state/unconverted.txt.
-State and log live in .state/ (not in Git).
+State and log live in .state/<os>/ (not in Git).
 """
 import hashlib
 import json
@@ -31,7 +33,8 @@ from datetime import datetime
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-STATE = HERE / ".state"
+OS = {"win32": "windows", "darwin": "macos"}.get(sys.platform, "linux")
+STATE = HERE / ".state" / OS
 INDEXABLE = {".md", ".txt", ".pdf", ".docx"}
 CONVERTIBLE = {".json", ".html", ".htm"}
 LOCK_STALE_SECONDS = 24 * 3600  # a first sync with PDF captions can take hours
@@ -39,7 +42,7 @@ SKIP_DIRS = {".git", "node_modules"}  # never documents, and slow to walk every 
 
 
 def log(msg):
-    STATE.mkdir(exist_ok=True)
+    STATE.mkdir(parents=True, exist_ok=True)
     line = f"{datetime.now():%Y-%m-%d %H:%M:%S} {msg}"
     print(line, flush=True)
     path = STATE / "watcher.log"
@@ -134,7 +137,7 @@ def acquire(lock):
 def sync(name, inst, cfg, roots):
     db = expand(inst["db"])
     db.mkdir(parents=True, exist_ok=True)
-    env = {k: v for k, v in os.environ.items() if k not in ("BASE_DIR", "IGNORE_PATHS")}
+    env = {k: v for k, v in os.environ.items() if k not in ("BASE_DIR", "IGNORE_PATHS", "RAG_DEVICE")}
     # folders the snapshot skips must be kept out of the index too, or changes there go unseen
     env["IGNORE_PATHS"] = json.dumps(inst.get("ignore", []) + [f"**/{d}/**" for d in sorted(SKIP_DIRS)])
     env.update({
@@ -142,6 +145,8 @@ def sync(name, inst, cfg, roots):
         "DB_PATH": str(db),
         "CACHE_DIR": str(expand(cfg["cache_dir"])),
         "MODEL_NAME": cfg["model"],
+        # cpu, or the GPU backend of this OS: dml (Windows), cuda (Linux x64), coreml (macOS)
+        "RAG_DEVICE": cfg.get("device", "cpu"),
     })
     cmd = [shutil.which("npx") or "npx", "-y", cfg["package"], "sync"]
     if inst.get("visual"):
@@ -175,7 +180,7 @@ def unconverted(roots):
 
 
 def run_pass(cfg):
-    STATE.mkdir(exist_ok=True)
+    STATE.mkdir(parents=True, exist_ok=True)
     state_file = STATE / "snapshots.json"
     state = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
     open_items = []
@@ -214,10 +219,13 @@ def run_pass(cfg):
 
 
 def main():
-    cfg = json.loads((HERE / "instances.json").read_text(encoding="utf-8"))
+    path = HERE / f"instances.{OS}.json"
+    if not path.exists():
+        path = HERE / "instances.json"
+    cfg = json.loads(path.read_text(encoding="utf-8"))
     once = "--once" in sys.argv
     every = "one pass" if once else "every %ss" % cfg["interval_seconds"]
-    log("watcher started (%s)" % every)
+    log("watcher started (%s, config %s)" % (every, path.name))
     while True:
         try:
             run_pass(cfg)

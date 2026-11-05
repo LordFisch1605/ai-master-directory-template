@@ -3,6 +3,7 @@
   "package": "mcp-local-rag@0.23.1",
   "cache_dir": "~/ai-master-directory/05-Knowledge/.models",
   "model": "onnx-community/embeddinggemma-2-ONNX",
+  "device": "cpu",
   "instances": {
     "knowledge": {
       "roots": [
