@@ -18,6 +18,7 @@ __pycache__/
 05-Knowledge/.models/
 05-Knowledge/.state/
 05-Knowledge/.derived-cache/
+05-Knowledge/.tool/
 05-Knowledge/instances.json
 05-Knowledge/instances.windows.json
 05-Knowledge/instances.linux.json

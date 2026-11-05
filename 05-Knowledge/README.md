@@ -18,7 +18,8 @@ Suggested setup:
   `instances.example.json`), or per OS in `instances.windows.json` / `instances.linux.json` /
   `instances.macos.json`, so a dual-boot machine can share one checkout; run it with
   `python3 watcher.py` at login. `device` picks `cpu` or the GPU backend: `dml` (Windows),
-  `cuda` (Linux x64), `coreml` (macOS). An index stores absolute paths, so it belongs to one
+  `cuda` (Linux x64), `coreml` (macOS); `batch_size` (default 16) is lowered for a small
+  GPU, through a patched local install of the tool in `.tool/`. An index stores absolute paths, so it belongs to one
   OS; give each OS its own `db` paths.
 - **Agents:** stdio MCP server, registered in Claude Code and in local-model clients.
 - **Layout:** documents in `docs/`, index in `.index/`, model cache in `.models/`; the last two
