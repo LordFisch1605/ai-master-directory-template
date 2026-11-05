@@ -17,8 +17,9 @@ Per instance and pass:
      Unchanged since the last successful sync: nothing to do.
   4. Otherwise take the instance's lock (one writer per index) and run the tool's `sync`;
      record the snapshot only when the sync succeeded.
-The tool runs from a local install in .tool/<version>/ (made on first use), patched so the
-embedding batch size comes from "batch_size": the tool fixes it at 16, too much for a small GPU.
+The tool runs from a local install in .tool/<version>/ (made on first use), patched so that
+"batch_size" sets the embedding batch (the tool fixes it at 16, too much for a small GPU) and
+"gpu_id" picks the DirectML adapter (it always takes adapter 0, often the integrated GPU).
 Raw folders: JSON/HTML in a _raw/ (or _rohdaten/) with neither a Markdown version in the
 sibling _derived/ nor a line in _derived/.skipped is listed in .state/unconverted.txt.
 State and log live in .state/<os>/ (not in Git).
@@ -42,8 +43,17 @@ CONVERTIBLE = {".json", ".html", ".htm"}
 LOCK_STALE_SECONDS = 24 * 3600  # a first sync with PDF captions can take hours
 SKIP_DIRS = {".git", "node_modules"}  # never documents, and slow to walk every pass
 TOOL = HERE / ".tool"
-BATCH_PATCH = ("batchSize: 16,", "batchSize: Number(process.env.RAG_BATCH_SIZE) || 16,")
-BATCH_FILES = ("dist/cli/common.js", "dist/server/index.js")
+# (file under node_modules, original text, patched text); each original occurs exactly once
+PATCHES = [
+    (f, "batchSize: 16,", "batchSize: Number(process.env.RAG_BATCH_SIZE) || 16,")
+    for f in ("mcp-local-rag/dist/cli/common.js", "mcp-local-rag/dist/server/index.js")
+] + [(
+    "@huggingface/transformers/dist/transformers.node.mjs",
+    "session_options.executionProviders ??= executionProviders;",
+    "session_options.executionProviders ??= process.env.RAG_DML_DEVICE_ID ? executionProviders.map("
+    "(p) => p === \"dml\" ? { name: \"dml\", deviceId: Number(process.env.RAG_DML_DEVICE_ID) } : p)"
+    " : executionProviders;",
+)]
 
 
 def log(msg):
@@ -142,19 +152,21 @@ def acquire(lock):
 def tool(cfg):
     """Command that runs the pinned tool from .tool/<version>/, installing and patching it once."""
     name, version = cfg["package"].rsplit("@", 1)
-    pkg = TOOL / version / "node_modules" / name
-    entry = pkg / "dist" / "index.js"
+    modules = TOOL / version / "node_modules"
+    entry = modules / name / "dist" / "index.js"
     if not entry.exists():
         log(f"installing {cfg['package']} into {TOOL / version}")
         subprocess.run([shutil.which("npm") or "npm", "install", "--prefix", str(TOOL / version),
                         "--no-save", "--no-audit", "--no-fund", cfg["package"]], check=True,
                        capture_output=True)
-        for rel in BATCH_FILES:
-            f = pkg / rel
-            text = f.read_text(encoding="utf-8")
-            if text.count(BATCH_PATCH[0]) != 1:  # a new version changed the code: check by hand
-                raise RuntimeError(f"batch-size patch does not fit {f}")
-            f.write_text(text.replace(*BATCH_PATCH), encoding="utf-8")
+    for rel, old, new in PATCHES:
+        f = modules / rel
+        text = f.read_text(encoding="utf-8")
+        if new in text:
+            continue
+        if text.count(old) != 1:  # a new version changed the code: check the patch by hand
+            raise RuntimeError(f"patch does not fit {f}")
+        f.write_text(text.replace(old, new), encoding="utf-8")
     return [shutil.which("node") or "node", str(entry)]
 
 
@@ -162,7 +174,7 @@ def sync(name, inst, cfg, roots):
     db = expand(inst["db"])
     db.mkdir(parents=True, exist_ok=True)
     env = {k: v for k, v in os.environ.items()
-           if k not in ("BASE_DIR", "IGNORE_PATHS", "RAG_DEVICE", "RAG_BATCH_SIZE")}
+           if k not in ("BASE_DIR", "IGNORE_PATHS", "RAG_DEVICE", "RAG_BATCH_SIZE", "RAG_DML_DEVICE_ID")}
     # folders the snapshot skips must be kept out of the index too, or changes there go unseen
     env["IGNORE_PATHS"] = json.dumps(inst.get("ignore", []) + [f"**/{d}/**" for d in sorted(SKIP_DIRS)])
     env.update({
@@ -174,6 +186,8 @@ def sync(name, inst, cfg, roots):
         "RAG_DEVICE": cfg.get("device", "cpu"),
         "RAG_BATCH_SIZE": str(cfg.get("batch_size", 16)),  # lower it if the GPU runs out of memory
     })
+    if "gpu_id" in cfg:  # DirectML adapter index, as in Task Manager's "GPU N"
+        env["RAG_DML_DEVICE_ID"] = str(cfg["gpu_id"])
     cmd = tool(cfg) + ["sync"]
     if inst.get("visual"):
         cmd += ["--visual", "--visual-quality", inst["visual"]]
@@ -248,7 +262,7 @@ def main():
     path = HERE / f"instances.{OS}.json"
     if not path.exists():
         path = HERE / "instances.json"
-    cfg = json.loads(path.read_text(encoding="utf-8"))
+    cfg = json.loads(path.read_text(encoding="utf-8-sig"))  # Windows editors may add a BOM
     once = "--once" in sys.argv
     every = "one pass" if once else "every %ss" % cfg["interval_seconds"]
     log("watcher started (%s, config %s)" % (every, path.name))
