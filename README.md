@@ -32,8 +32,11 @@ repo, so the nested repos stay fully independent: own remote, own history, own p
 ## Setup
 
 1. Clone this repo wherever you keep your work.
-2. Register the guard (Python 3, standard library only) in `~/.claude/settings.json`,
-   replacing `<path>` with the absolute path of your clone:
+2. Set your locked locations in `.claude/hooks/local-only-guard.json`: a drive letter on
+   Windows (`"W:"`), a mount point on Linux/macOS (`"~/work-vault"`), and folder names.
+3. Register the guard (Python 3, standard library only) in `~/.claude/settings.json`,
+   replacing `<path>` with the absolute path of your clone, and `python` with `python3` on
+   Linux/macOS:
 
    ```json
    "hooks": {
@@ -44,14 +47,17 @@ repo, so the nested repos stay fully independent: own remote, own history, own p
    }
    ```
 
-3. Install VeraCrypt, create a file container `90-Work/Work.hc`, and mount it as `W:` only for
-   sessions with a local model. Keep its password in a password manager, never in this folder.
+4. Install VeraCrypt, create a file container `90-Work/Work.hc`, and mount it (as `W:` or at
+   `~/work-vault`) only for sessions with a local model. Keep its password in a password
+   manager, never in this folder.
 
 ## What the guard does not do
 
-It matches paths written out in a tool call. A path built indirectly, or a recursive search
-from a parent folder, is not caught — `91-Private/` is an ordinary folder, so put anything truly
-sensitive in an encrypted container as well. Plain mentions of the locked folder names in a
-shell command or message are blocked too (false positives are the price of a simple rule).
-Paths inside MCP tool calls are matched as text only; do not register an MCP server that
-indexes the work volume in a cloud-model client.
+- It is a Claude Code hook. Other agents (OpenCode, other clients) do not run it; for them the
+  unmounted encrypted volume and their own permission settings are the protection.
+- It matches paths written out in a tool call. A path built indirectly, or a recursive search
+  from a parent folder, is not caught — `91-Private/` is an ordinary folder, so put anything
+  truly sensitive in an encrypted container as well.
+- A shell command that merely mentions a locked location is blocked too.
+- MCP tool input is matched as text only; do not register an MCP server that indexes the work
+  volume in a cloud-model client.

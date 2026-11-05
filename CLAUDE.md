@@ -28,9 +28,14 @@ Enforced by `.claude/hooks/local-only-guard.py`, registered in the user-level
 - **Raw data** (`_raw/`, `_rohdaten/`, `Quellen/`, anywhere): new files may be added, existing
   ones are never edited or overwritten.
 
+The locked locations are listed in `.claude/hooks/local-only-guard.json` (Windows drive `W:`,
+Linux/macOS mount point `~/work-vault`, the folder names). The hook checks file-tool paths,
+shell commands and MCP tool input; it works on Windows, Linux and macOS.
+
 A block is final. Do not look for another route to the same files (a variable, a parent-folder
 glob, another tool); tell the user what you needed instead. The hook only matches paths written
-out in a call, so keeping to the rule is on you, not on the hook.
+out in a call, so keeping to the rule is on you, not on the hook. It is a Claude Code hook:
+other agents do not run it.
 
 ## 3. Git
 
