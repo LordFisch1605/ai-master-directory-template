@@ -6,7 +6,7 @@ data that only local models may touch, one for private data no agent may touch.
 
 ```
 ai-master-directory/
-  CLAUDE.md  README.md  .gitignore
+  AGENTS.md  README.md  .gitignore
   .claude/hooks/local-only-guard.py   access rules, registered machine-wide
   01-Tasks/              agent tasks: research, plans, reviews
   02-Projects/

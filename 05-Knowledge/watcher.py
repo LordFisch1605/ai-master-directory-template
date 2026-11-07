@@ -268,7 +268,7 @@ def run_pass(cfg):
             open_items += unconverted(roots)
         digest, count, bad = snapshot(roots, inst.get("ignore", []))
         if bad != state.get(f"{name}:mangled", []):
-            if bad:  # indexed under the broken name; fix the copy, see CLAUDE.md section 3
+            if bad:  # indexed under the broken name; fix the copy, see AGENTS.md section 3
                 log(f"{name}: {len(bad)} file name(s) look mangled (UTF-8 read as CP437): "
                     + ", ".join(bad[:5]))
             state[f"{name}:mangled"] = bad

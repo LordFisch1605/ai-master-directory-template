@@ -1,7 +1,11 @@
-# CLAUDE.md — AI master directory
+# AGENTS.md — AI master directory
 
 One directory for all AI-assisted work: tasks, projects, study, skills, and the knowledge base
-agents retrieve from. Where an area has its own `CLAUDE.md`, that file wins inside it.
+agents retrieve from. Where an area has its own `AGENTS.md`, that file wins inside it.
+
+The rules live in `AGENTS.md` files only, read by every coding tool. Never add a `CLAUDE.md`
+anywhere in this tree: for Claude Code, one `CLAUDE.md` in the start folder or above switches
+every `AGENTS.md` off.
 
 ## 1. Areas
 
