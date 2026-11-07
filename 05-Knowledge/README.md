@@ -18,10 +18,18 @@ Suggested setup:
   `instances.example.json`), or per OS in `instances.windows.json` / `instances.linux.json` /
   `instances.macos.json`, so a dual-boot machine can share one checkout; run it with
   `python3 watcher.py` at login. `device` picks `cpu` or the GPU backend: `dml` (Windows),
-  `cuda` (Linux x64), `coreml` (macOS); `batch_size` (default 16) is lowered for a small
-  GPU and `gpu_id` picks the DirectML adapter (the tool always takes adapter 0, often the
-  integrated GPU), both through a patched local install of the tool in `.tool/`. An index stores absolute paths, so it belongs to one
+  `cuda` (Linux x64), `coreml` (macOS); `batch_size` (default 16) sets memory use per
+  machine (about 16 for 16 GB free, 4 for 8 GB, 1–2 for 4 GB) and
+  `max_tokens` (default 2048, the same on every machine sharing an index) caps chunk length; `gpu_id` picks the DirectML adapter (the tool always takes adapter 0, often the
+  integrated GPU), all three through a patched local install of the tool in `.tool/`. An index stores absolute paths, so it belongs to one
   OS; give each OS its own `db` paths.
+- **Figures and scans in PDFs:** `caption.py` (needs `pip install pypdfium2` and Ollama),
+  run by the watcher for an instance with a `captions` block, sends each page with figures to
+  a local vision model, one page at a time and never alongside the embedding model, and
+  transcribes scanned pages, which otherwise give no text. Results go to
+  `.derived-cache/captions/`, indexed as text; done pages are never redone. Default model
+  `bonsai-2:9b` (~3.4 GB; ~12 s per page on a 6 GB GPU, minutes on a CPU); `max_edge` sets
+  the render size. Non-local Ollama hosts are refused.
 - **Agents:** stdio MCP server, registered in Claude Code and in local-model clients.
 - **Layout:** documents in `docs/`, index in `.index/`, model cache in `.models/`; the last two
   stay out of Git.

@@ -23,7 +23,7 @@
         "**/.claude/**"
       ],
       "db": "~/ai-master-directory/05-Knowledge/.index/knowledge",
-      "visual": "quality"
+      "captions": {"model": "bonsai-2:9b", "max_edge": 1536}
     },
     "raw": {
       "discover": {

@@ -19,7 +19,9 @@ Per instance and pass:
      record the snapshot only when the sync succeeded.
 The tool runs from a local install in .tool/<version>/ (made on first use), patched so that
 "batch_size" sets the embedding batch (the tool fixes it at 16, too much for a small GPU) and
-"gpu_id" picks the DirectML adapter (it always takes adapter 0, often the integrated GPU).
+"gpu_id" picks the DirectML adapter (it always takes adapter 0, often the integrated GPU), and
+"max_tokens" caps chunk length (the tool takes the model's window, 131,072 tokens for
+EmbeddingGemma 2, so one long code block became one chunk and needed gigabytes of memory).
 Raw folders: JSON/HTML in a _raw/ (or _rohdaten/) with neither a Markdown version in the
 sibling _derived/ nor a line in _derived/.skipped is listed in .state/unconverted.txt.
 State and log live in .state/<os>/ (not in Git).
@@ -48,6 +50,11 @@ PATCHES = [
     (f, "batchSize: 16,", "batchSize: Number(process.env.RAG_BATCH_SIZE) || 16,")
     for f in ("mcp-local-rag/dist/cli/common.js", "mcp-local-rag/dist/server/index.js")
 ] + [(
+    "mcp-local-rag/dist/embedder/index.js",
+    "function resolveEffectiveCap(positionWindow, tokenizerLimit) {",
+    "function resolveEffectiveCap(positionWindow, tokenizerLimit) {\n"
+    "    if (Number(process.env.RAG_MAX_TOKENS) > 0) return Number(process.env.RAG_MAX_TOKENS);",
+), (
     "@huggingface/transformers/dist/transformers.node.mjs",
     "session_options.executionProviders ??= executionProviders;",
     "session_options.executionProviders ??= process.env.RAG_DML_DEVICE_ID ? executionProviders.map("
@@ -118,10 +125,21 @@ def roots_of(inst):
     return sorted(set(roots))
 
 
+def mangled(name):
+    """True for a name whose UTF-8 bytes were read as CP437 on the way here (ö -> ├╢), as
+    Windows' tar.exe does with a GNU tar archive. A real umlaut never passes this test."""
+    try:
+        return name.encode("cp437").decode("utf-8") != name
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return False
+
+
 def snapshot(roots, ignore):
+    """Digest and count of the indexable files, and those whose path looks mangled."""
     pats = [glob_regex(p) for p in ignore]
     h = hashlib.sha256()
     count = 0
+    bad = []
     for root in roots:
         h.update(f"root:{root}\n".encode())
         for f in sorted(walk(root)):
@@ -133,7 +151,9 @@ def snapshot(roots, ignore):
             st = f.stat()
             h.update(f"{rel}\0{st.st_size}\0{st.st_mtime_ns}\n".encode())
             count += 1
-    return h.hexdigest(), count
+            if any(mangled(part) for part in rel.split("/")):
+                bad.append(str(f))
+    return h.hexdigest(), count, bad
 
 
 def acquire(lock):
@@ -174,7 +194,8 @@ def sync(name, inst, cfg, roots):
     db = expand(inst["db"])
     db.mkdir(parents=True, exist_ok=True)
     env = {k: v for k, v in os.environ.items()
-           if k not in ("BASE_DIR", "IGNORE_PATHS", "RAG_DEVICE", "RAG_BATCH_SIZE", "RAG_DML_DEVICE_ID")}
+           if k not in ("BASE_DIR", "IGNORE_PATHS", "RAG_DEVICE", "RAG_BATCH_SIZE", "RAG_DML_DEVICE_ID",
+                         "RAG_MAX_TOKENS")}
     # folders the snapshot skips must be kept out of the index too, or changes there go unseen
     env["IGNORE_PATHS"] = json.dumps(inst.get("ignore", []) + [f"**/{d}/**" for d in sorted(SKIP_DIRS)])
     env.update({
@@ -185,6 +206,8 @@ def sync(name, inst, cfg, roots):
         # cpu, or the GPU backend of this OS: dml (Windows), cuda (Linux x64), coreml (macOS)
         "RAG_DEVICE": cfg.get("device", "cpu"),
         "RAG_BATCH_SIZE": str(cfg.get("batch_size", 16)),  # lower it if the GPU runs out of memory
+        # longer text is split into pieces of this size before embedding; memory grows with its square
+        "RAG_MAX_TOKENS": str(cfg.get("max_tokens", 2048)),
     })
     if "gpu_id" in cfg:  # DirectML adapter index, as in Task Manager's "GPU N"
         env["RAG_DML_DEVICE_ID"] = str(cfg["gpu_id"])
@@ -233,9 +256,22 @@ def run_pass(cfg):
             state[f"{name}:missing"] = missing
             continue
         state.pop(f"{name}:missing", None)
+        if inst.get("captions"):  # figure captions first, so the sync below indexes them
+            if str(HERE) not in sys.path:
+                sys.path.insert(0, str(HERE))
+            import caption
+            pats = [glob_regex(p) for p in inst.get("ignore", [])]
+            caption.run(name, inst, roots, HERE, expand, walk,
+                        lambda root, f: any(p.match(f.relative_to(root).as_posix()) for p in pats), log)
+            roots = sorted(set(roots + [caption.cache_root(HERE, name, inst, expand)]))
         if inst.get("report_unconverted"):
             open_items += unconverted(roots)
-        digest, count = snapshot(roots, inst.get("ignore", []))
+        digest, count, bad = snapshot(roots, inst.get("ignore", []))
+        if bad != state.get(f"{name}:mangled", []):
+            if bad:  # indexed under the broken name; fix the copy, see CLAUDE.md section 3
+                log(f"{name}: {len(bad)} file name(s) look mangled (UTF-8 read as CP437): "
+                    + ", ".join(bad[:5]))
+            state[f"{name}:mangled"] = bad
         if state.get(name) == digest:
             continue
         lock = expand(inst["db"]).with_suffix(".lock")
