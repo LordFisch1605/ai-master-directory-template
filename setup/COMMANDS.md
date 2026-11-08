@@ -5,13 +5,16 @@ Every step of `setup.py`, by hand, for more control. Run them from the directory
 `/home/you/AI-Master-Directory`). Windows commands are PowerShell; Linux examples use `apt`
 (`dnf` and `pacman` take the same package names).
 
+No step needs an AI agent. Steps marked **Claude Code** register something in it; with another
+agent, do the equivalent in its own config (its docs say where hooks, permissions, MCP servers
+and skills go), and with none, skip them.
+
 ## 1. Prerequisites
 
 | Tool | Windows | macOS (Homebrew, brew.sh) | Linux |
 |---|---|---|---|
 | Python 3 | `winget install -e --id Python.Python.3.13` | `brew install python` | `sudo apt install python3 python3-pip` |
 | Git | `winget install -e --id Git.Git` | `brew install git` | `sudo apt install git` |
-| Claude Code | `irm https://claude.ai/install.ps1 \| iex` | `curl -fsSL https://claude.ai/install.sh \| bash` | same as macOS |
 
 Open a new terminal after installing, so the new `PATH` is read.
 
@@ -26,24 +29,38 @@ Then give the tasks repo an `AGENTS.md` that points to `../../AGENTS.md` and
 `../../CONVENTIONS.md`, and create the task categories (`CONVENTIONS.md`, section 4). PowerShell
 runs these lines as they are.
 
-## 3. Access guard
+## 3. Hooks (Claude Code)
 
-1. Set the private locations in `.claude/hooks/local-only-guard.json`: `"private"` lists the
-   drive letter of the mounted container (`"P:"`), the mount point (`"~/private-vault"`) and
-   the folder name (`"91-Private"`). `"work"` is for local-only locations, empty by default.
-2. Merge this into `~/.claude/settings.json` (`%USERPROFILE%\.claude\settings.json` on
-   Windows); `python` is `python3` on Linux/macOS:
+Both hooks are in `03-Agent/hooks/claude-code/`; their docstrings say exactly what they check,
+which is also the specification for building them in another agent.
 
-   ```json
-   "hooks": {
-     "PreToolUse": [{ "matcher": "*", "hooks": [{ "type": "command",
-       "command": "python \"<root>/.claude/hooks/local-only-guard.py\" pre" }] }],
-     "SessionStart": [{ "hooks": [{ "type": "command",
-       "command": "python \"<root>/.claude/hooks/local-only-guard.py\" session" }] }]
-   }
-   ```
+**Access guard.** Set the private locations in `local-only-guard.json`: `"private"` lists the
+drive letter of the mounted container (`"P:"`), the mount point (`"~/private-vault"`) and the
+folder name (`"91-Private"`). `"work"` is for local-only locations, empty by default.
 
-3. Check it: in a new Claude Code session, ask the agent to list `91-Private`. It must be blocked.
+**Stay-inside (optional).** Set `"mode"` in `stay-inside.json`: `"readwrite"` blocks reading
+and writing outside this directory, `"write"` only writing. Both modes block system-wide
+package installs (winget, brew, apt, `npm -g`, `pip --user` …), so you install those yourself.
+Paths that should count as inside (e.g. the agent's temp folder) go into `"allow"`.
+
+Merge the hooks you want into `~/.claude/settings.json` (`%USERPROFILE%\.claude\settings.json`
+on Windows); `python` is `python3` on Linux/macOS. Leave out the stay-inside entry if you do not
+want it:
+
+```json
+"hooks": {
+  "PreToolUse": [
+    { "matcher": "*", "hooks": [{ "type": "command",
+      "command": "python \"<root>/03-Agent/hooks/claude-code/local-only-guard.py\" pre" }] },
+    { "matcher": "*", "hooks": [{ "type": "command",
+      "command": "python \"<root>/03-Agent/hooks/claude-code/stay-inside.py\" pre" }] }
+  ],
+  "SessionStart": [{ "hooks": [{ "type": "command",
+    "command": "python \"<root>/03-Agent/hooks/claude-code/local-only-guard.py\" session" }] }]
+}
+```
+
+Check it: in a new session, ask the agent to list `91-Private`. It must be blocked.
 
 ## 4. Knowledge base (RAG)
 
@@ -71,7 +88,9 @@ cp 04-Knowledge/instances.example.json 04-Knowledge/instances.json
 
 On Windows: `Copy-Item -Recurse setup\knowledge 04-Knowledge`, then
 `Copy-Item 04-Knowledge\instances.example.json 04-Knowledge\instances.json`.
-Replace `~/ai-master-directory` with `<root>` in it. Memory per machine:
+Replace `~/ai-master-directory` with `<root>` in it. `interval_seconds` is how often the watcher
+checks for changed files (300 = every 5 minutes; an unchanged pass costs a few seconds of
+scanning). Memory per machine:
 
 | RAM it may take | `batch_size` | `captions.model` |
 |---|---|---|
@@ -104,15 +123,33 @@ python 04-Knowledge/watcher.py --once
 This installs the patched tool into `04-Knowledge/.tool/0.23.1/` and builds both indexes; the
 first run takes minutes to hours.
 
-### Register in Claude Code
+### Register the search servers
 
-Once per instance (`knowledge`, `raw`), with that instance's `db` path:
+Each instance (`knowledge`, `raw`) is a stdio MCP server: command `node`, argument
+`<root>/04-Knowledge/.tool/0.23.1/node_modules/mcp-local-rag/dist/index.js`, and these
+environment variables, with that instance's `db` path:
+
+```json
+{ "mcpServers": { "knowledge": {
+  "command": "node",
+  "args": ["<root>/04-Knowledge/.tool/0.23.1/node_modules/mcp-local-rag/dist/index.js"],
+  "env": { "BASE_DIR": "<root>", "DB_PATH": "<root>/04-Knowledge/.index/knowledge",
+           "CACHE_DIR": "<root>/04-Knowledge/.models",
+           "MODEL_NAME": "onnx-community/embeddinggemma-2-ONNX",
+           "RAG_HYBRID_WEIGHT": "0", "RAG_MAX_TOKENS": "2048" } } } }
+```
+
+Keep it in `03-Agent/mcp/knowledge-servers.json` and add it to your agent's MCP config. Deny the
+agent the servers' write tools (`sync_start`, `ingest_file`, `ingest_data`, `delete_file`), so
+only the watcher writes the index.
+
+**Claude Code**, once per instance:
 
 ```bash
 claude mcp add -s user knowledge -e BASE_DIR=<root> -e DB_PATH=<root>/04-Knowledge/.index/knowledge -e CACHE_DIR=<root>/04-Knowledge/.models -e MODEL_NAME=onnx-community/embeddinggemma-2-ONNX -e RAG_HYBRID_WEIGHT=0 -e RAG_MAX_TOKENS=2048 -- node <root>/04-Knowledge/.tool/0.23.1/node_modules/mcp-local-rag/dist/index.js
 ```
 
-Then keep agents from writing to the index; add to `~/.claude/settings.json`:
+and the deny rules in `~/.claude/settings.json`:
 
 ```json
 "permissions": { "deny": [
@@ -200,8 +237,16 @@ Use the drive letter and mount point that are in the guard's `"private"` list.
 ## 6. Skills
 
 ```bash
-git clone https://github.com/LordFisch1605/paul-skills-public.git 03-Skills/paul-skills-public
-claude plugin marketplace add ./03-Skills/paul-skills-public
+git clone https://github.com/LordFisch1605/paul-skills-public.git 03-Agent/skills/paul-skills-public
+```
+
+Each skill is a `SKILL.md` under `plugins/*/skills/`; load them the way your agent loads skills
+or instructions.
+
+**Claude Code** installs them as plugins:
+
+```bash
+claude plugin marketplace add ./03-Agent/skills/paul-skills-public
 claude plugin install paul-base@paul-skills-public -s user
 claude plugin install paul-dev@paul-skills-public -s user
 ```

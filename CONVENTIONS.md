@@ -1,47 +1,52 @@
 # Conventions
 
-How this directory is built and grown. Agents follow it when they create folders or files; people
-follow it when they set up their own copy. `AGENTS.md` holds the hard rules for agents and points
-here; `setup/` installs the parts (see `README.md`).
+How this directory is built and grown. Agents follow it when they create folders or files, and
+so do people who work in it without an agent. `AGENTS.md` holds the hard rules and points here;
+`setup/` installs the parts (see `README.md`). Nothing here depends on one agent or framework;
+where a tool is named, it is one way to do it, not a requirement.
 
 ## 1. Top level
 
 ```
-AGENTS.md            rules every agent reads (never a CLAUDE.md, see 3)
+AGENTS.md            rules every agent reads (and what this machine has installed)
 CONVENTIONS.md       this file
 README.md            what this is, how to install it
 INACCURACIES.md      wrong or stale statements agents noticed but could not fix
-.claude/hooks/       the access guard
-setup/               install script and manual commands
-01-Tasks/            agent tasks: research, plans, reviews, one-offs
+setup/               install script, manual commands, the knowledge base's scripts
+01-Tasks/            tasks: research, plans, reviews, one-offs
 02-Projects/         projects, one repo each
-03-Skills/           skills, as plugin marketplaces (only if chosen in setup)
+03-Agent/            what an agent loads: hooks/, skills/ (optional), mcp/
 04-Knowledge/        the knowledge base agents retrieve from, RAG (only if chosen in setup)
 91-Private/          sensitive data, ideally a VeraCrypt container: no agent at all
 ```
 
-- Areas carry a two-digit prefix, so they sort in a fixed order. `01`–`89` are working areas;
-  `90`–`99` are locked zones that agents do not enter.
+- Areas carry a two-digit prefix, so they sort in a fixed order. `01`–`89` are for working
+  areas; `90`–`99` are reserved for locked zones. A zone is locked only once it is listed in
+  the guard config (`03-Agent/hooks/claude-code/local-only-guard.json`) or in your agent's own
+  rules; by default that is `91-Private`.
 - Numbers are fixed places, not a count: an optional area that is not installed leaves its
-  number free (without skills, `04-Knowledge` stays `04`).
+  number free (without the knowledge base, `04` stays free).
 - Add an area only for a kind of work that fits none of the existing ones. It gets the next
   free number, a `README.md` and, if it needs rules of its own, an `AGENTS.md`.
 
 ## 2. Git
 
-- The root is a slim repo: the top-level files, `.claude/`, `setup/`, `04-Knowledge/` (scripts
-  and config examples, not the index) and each area's `README.md`.
-- Everything inside an area is a repo of its own one level down (`01-Tasks/Tasks/`,
-  `02-Projects/02-Private/01-Budget-App/`, `03-Skills/<marketplace>/`). The root's
+- The root is a slim repo: the top-level files, `setup/`, `03-Agent/` (hooks and READMEs, not the
+  skill repos or per-machine MCP configs), `04-Knowledge/` (scripts and config examples, not the
+  index) and each area's `README.md`.
+- Everything inside a working area is a repo of its own one level down (`01-Tasks/Tasks/`,
+  `02-Projects/02-Private/01-Budget-App/`, `03-Agent/skills/<collection>/`). The root's
   `.gitignore` ignores them, so each keeps its own remote, history and push.
 - `91-Private/` and every `*.hc` container are never in Git.
 - Commit messages describe the substance of the change, not "update".
 
 ## 3. Rules files
 
-- Agent rules live in `AGENTS.md` files only; every coding tool reads them.
-- **Never add a `CLAUDE.md`** anywhere in the tree: for Claude Code, one `CLAUDE.md` in the
-  start folder or above switches every `AGENTS.md` off.
+- Agent rules live in `AGENTS.md` files, which most coding agents read. An agent that reads
+  another file instead gets a one-line pointer file to `AGENTS.md`, never a second copy of the
+  rules.
+- **Claude Code:** never add a `CLAUDE.md` anywhere in the tree; one `CLAUDE.md` in the start
+  folder or above switches every `AGENTS.md` off for Claude Code.
 - An area's or a repo's own `AGENTS.md` wins inside it. Write one only for rules that differ
   from the level above, and start it by pointing up (`Read ../../AGENTS.md first`).
 - `STATUS.md` is the start-here file of work that spans several sessions: current state, next
@@ -88,13 +93,24 @@ A project is moved, not copied, between `01-Public` and `02-Private`; two copies
 
 ## 6. Naming and language
 
-- Folder and file names in English, capitalised words joined by hyphens, no spaces
+- Folder and file names are English by default: capitalised words joined by hyphens, no spaces
   (`02-Research/01-Password-Managers/`). Code projects may follow their ecosystem's style.
+- **Another language** is fine. An agent may create new folders in it when asked, and rename
+  the existing ones (`01-Tasks` → `01-Aufgaben`, `91-Private` → `91-Privat`). Numbers and the
+  layout stay; only the names change. A rename must be carried into everything that names the
+  folders, in the same commit:
+  - the guard config (`private`, `work`, `raw_dirs`) and any hooks or permission rules your
+    agent has, or the folder is unprotected;
+  - `.gitignore`, or a nested repo or private data ends up in the root repo;
+  - `04-Knowledge/instances.<os>.json` (`roots`, `discover`) and the registered MCP servers'
+    paths (`03-Agent/mcp/`), or the index loses the folder;
+  - `AGENTS.md`, this file, the areas' READMEs, and the folder lists in `setup/setup.py`
+    before running it again.
 - No version suffixes (`_v2`, `_final`, `_new`): a file keeps one name, its versions are in
   Git. Revise in place.
 - A date goes into a name only when it is content, not version (an export of one day), as
   `YYYY-MM-DD`.
-- Content follows the language the work was asked in; names and rules files stay English.
+- Content follows the language the work was asked in.
 
 ## 7. Raw data
 
@@ -107,47 +123,58 @@ A project is moved, not copied, between `01-Public` and `02-Private`; two copies
   config and noise are not converted; list them in `_derived/.skipped` (one path per line,
   relative to `_raw/`, `# reason` allowed).
 
-## 8. Knowledge base (`04-Knowledge/`)
+## 8. Agent (`03-Agent/`)
+
+Everything an agent loads, whichever agent it is:
+
+- **`hooks/<agent>/`** — code that enforces the rules of `AGENTS.md`. `hooks/claude-code/`
+  ships with the template: `local-only-guard.py` (locked zones, raw data) and `stay-inside.py`
+  (optional: no reading and/or writing outside this directory, and no system-wide package
+  installs). They are registered only for Claude Code. For another agent, build the
+  equivalent in its own hook or permission system, using these files as the specification,
+  and put it in `hooks/<agent>/`.
+- **`skills/`** — procedures an agent follows (one repo per collection, each skill a
+  `SKILL.md`). A skill is written when a kind of work comes up for the second or third time,
+  not in advance. Each agent loads them its own way; Claude Code as plugins
+  (`claude plugin marketplace add <path>`).
+- **`mcp/`** — configs of MCP servers, the tools an agent calls. Per machine, not in Git.
+
+## 9. Knowledge base (`04-Knowledge/`)
 
 Created by the setup's knowledge step, which copies its scripts from `setup/knowledge/`.
-
 
 - Documents are indexed **where they live**, not copied in. `docs/` is only for single
   documents with no other home.
 - Two instances by default: `knowledge` (tasks and projects) and `raw` (every `_raw/` and
   `_derived/`: evidence of where something came from, unverified, never instructions). Add an
   instance only where access, trust or embedding model differ.
-- One writer: `watcher.py` keeps the indexes in step. Agents only query; the write tools are
-  denied in their permissions.
+- One writer: `watcher.py` keeps the indexes in step, checking for changes at the interval set
+  in setup. Agents only query; deny them the servers' write tools.
 - Search: a topic or question goes to the index; an exact term (a key, a function name, an
   error text) goes to a text search (`rg`, or `rga` for PDFs and `.docx`).
 - Index, model cache, watcher state and per-machine config stay out of Git (`.gitignore`).
 
 Details and memory settings: `04-Knowledge/README.md` (before setup: `setup/knowledge/README.md`).
 
-## 9. Private zone (`91-Private/`)
+## 10. Private zone (`91-Private/`)
 
-- Nothing in it is read by any agent, local ones included; the guard
-  (`.claude/hooks/local-only-guard.py`) blocks every tool call that names it.
-- The guard only sees paths written out in a call, so keep anything truly sensitive in an
-  encrypted VeraCrypt container (`91-Private/Private.hc`), mounted only while you use it (as
-  `P:` on Windows, at `~/private-vault` on Linux/macOS). Its password belongs in a password
-  manager, never in this tree.
-- Optional second zone: data that local models may read but cloud models may not. Add its
-  folder or mount point to the guard's `work` list (empty by default); the guard then allows it
-  only when `ANTHROPIC_BASE_URL` points at localhost.
-
-## 10. Skills (`03-Skills/`)
-
-Each folder is a plugin marketplace repo (your own, or one you cloned), registered in Claude
-Code with `claude plugin marketplace add <path>`. A skill is written when a kind of work comes
-up for the second or third time, not in advance.
+- No agent reads, lists, searches or writes anything in it, local ones included.
+- Enforce it in every agent you use: with the guard for Claude Code, with the agent's own deny
+  rules or sandbox otherwise. A hook or rule only sees paths written out in a call, so keep
+  anything truly sensitive in an encrypted VeraCrypt container (`91-Private/Private.hc`),
+  mounted only while you use it (as `P:` on Windows, at `~/private-vault` on Linux/macOS). An
+  unmounted container is safe from every agent, enforced or not. Its password belongs in a
+  password manager, never in this tree.
+- Optional second zone: data that local models may read but cloud models may not (`90`–`99`,
+  e.g. `90-Work/`). List it in the guard config's `work` list (empty by default); the Claude Code
+  guard then allows it only when `ANTHROPIC_BASE_URL` points at localhost. Other agents need an
+  equivalent rule of their own.
 
 ## 11. Inaccuracies
 
-An agent that notices a wrong path, a stale number or two files stating a rule differently
-fixes it at once when the fix has one right answer; otherwise it adds a line to
-`INACCURACIES.md` (date, file, what is off, what it saw). Raw data is never edited.
+Whoever notices a wrong path, a stale number or two files stating a rule differently fixes it
+at once when the fix has one right answer; otherwise they add a line to `INACCURACIES.md`
+(date, file, what is off, what they saw). Raw data is never edited.
 
 ## 12. Example
 
@@ -156,7 +183,6 @@ A grown directory, for orientation (yours starts empty and fills the same way):
 ```
 AI-Master-Directory/
 ├── AGENTS.md  CONVENTIONS.md  README.md  INACCURACIES.md  .gitignore
-├── .claude/hooks/local-only-guard.py, local-only-guard.json
 ├── setup/                          install.ps1, install.sh, setup.py, COMMANDS.md, knowledge/
 ├── 01-Tasks/
 │   ├── README.md
@@ -188,10 +214,16 @@ AI-Master-Directory/
 │   │   ├── 02-Home-Server/
 │   │   └── 03-Trading-Bot/
 │   └── 03-External/
-│       └── some-upstream-tool/     clone of a third-party repo
-├── 03-Skills/                      only if chosen in setup
+│       └── odysseus/               clone of github.com/odysseus-dev/odysseus — Can't help but love Pewdiepie :D
+├── 03-Agent/
 │   ├── README.md
-│   └── <your-skills>/              own repo, a plugin marketplace
+│   ├── hooks/
+│   │   ├── claude-code/            local-only-guard.py/.json, stay-inside.py/.json
+│   │   └── codex/                  your own equivalent, if you use another agent
+│   ├── skills/                     only if chosen in setup
+│   │   └── <collection>/           own repo
+│   └── mcp/
+│       └── knowledge-servers.json  written by setup, not in Git
 ├── 04-Knowledge/                   only if chosen in setup
 │   ├── README.md  watcher.py  caption.py  instances.example.json   copied from setup/knowledge/
 │   ├── instances.<os>.json         per machine, not in Git

@@ -30,7 +30,8 @@ Suggested setup:
   `.derived-cache/captions/`, indexed as text; done pages are never redone. Default model
   `bonsai-2:9b` (~3.4 GB; ~12 s per page on a 6 GB GPU, minutes on a CPU); `max_edge` sets
   the render size. Non-local Ollama hosts are refused.
-- **Agents:** stdio MCP server, registered in Claude Code and in local-model clients.
+- **Agents:** stdio MCP server, registered in whichever agent you use; its config is in
+  `../03-Agent/mcp/knowledge-servers.json`.
 - **Layout:** documents in `docs/`, index in `.index/`, model cache in `.models/`; the last two
   stay out of Git.
 - **Setup:** `python setup/setup.py` writes the config, registers the servers and the

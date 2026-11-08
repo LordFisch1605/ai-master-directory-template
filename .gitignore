@@ -1,15 +1,19 @@
-# areas with their own repo (03-Skills and 04-Knowledge exist only if chosen in setup)
+# areas with their own repo (03-Agent/skills and 04-Knowledge exist only if chosen in setup)
 01-Tasks/*
 02-Projects/*/*
-03-Skills/*
+03-Agent/skills/*
 !*/README.md
 !02-Projects/*/README.md
+!03-Agent/*/README.md
 
 # never in Git
 91-Private/
 *.hc
 
 __pycache__/
+
+# MCP server configs written by setup: absolute paths of this machine
+03-Agent/mcp/*.json
 
 # knowledge base: index, model cache, watcher state, OCR cache, per-machine config
 04-Knowledge/.index/
