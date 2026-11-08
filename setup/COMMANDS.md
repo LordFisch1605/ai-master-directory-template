@@ -20,10 +20,9 @@ Open a new terminal after installing, so the new `PATH` is read.
 ```bash
 git init
 git init 01-Tasks/Tasks
-git init 03-Uni/Study
 ```
 
-Then give each new repo an `AGENTS.md` that points to `../../AGENTS.md` and
+Then give the tasks repo an `AGENTS.md` that points to `../../AGENTS.md` and
 `../../CONVENTIONS.md`, and create the task categories (`CONVENTIONS.md`, section 4). PowerShell
 runs these lines as they are.
 
@@ -61,13 +60,17 @@ nvm install 26
 
 Check with `node --version`.
 
-### Config
+### Folder and config
+
+The scripts ship in `setup/knowledge/`; the knowledge area is created from them:
 
 ```bash
-cp 05-Knowledge/instances.example.json 05-Knowledge/instances.json
+cp -r setup/knowledge 04-Knowledge
+cp 04-Knowledge/instances.example.json 04-Knowledge/instances.json
 ```
 
-On Windows: `Copy-Item 05-Knowledge\instances.example.json 05-Knowledge\instances.json`.
+On Windows: `Copy-Item -Recurse setup\knowledge 04-Knowledge`, then
+`Copy-Item 04-Knowledge\instances.example.json 04-Knowledge\instances.json`.
 Replace `~/ai-master-directory` with `<root>` in it. Memory per machine:
 
 | RAM it may take | `batch_size` | `captions.model` |
@@ -76,7 +79,7 @@ Replace `~/ai-master-directory` with `<root>` in it. Memory per machine:
 | 8 GB | 4 | `bonsai-2:9b` |
 | 16 GB or more | 16 | `bonsai-2:9b` |
 
-`device` stays `cpu` unless you test a GPU backend (`05-Knowledge/README.md`).
+`device` stays `cpu` unless you test a GPU backend (`04-Knowledge/README.md`).
 
 ### Figure captions (optional)
 
@@ -95,10 +98,10 @@ run the watcher with that venv's Python.
 ### First build
 
 ```bash
-python 05-Knowledge/watcher.py --once
+python 04-Knowledge/watcher.py --once
 ```
 
-This installs the patched tool into `05-Knowledge/.tool/0.23.1/` and builds both indexes; the
+This installs the patched tool into `04-Knowledge/.tool/0.23.1/` and builds both indexes; the
 first run takes minutes to hours.
 
 ### Register in Claude Code
@@ -106,7 +109,7 @@ first run takes minutes to hours.
 Once per instance (`knowledge`, `raw`), with that instance's `db` path:
 
 ```bash
-claude mcp add -s user knowledge -e BASE_DIR=<root> -e DB_PATH=<root>/05-Knowledge/.index/knowledge -e CACHE_DIR=<root>/05-Knowledge/.models -e MODEL_NAME=onnx-community/embeddinggemma-2-ONNX -e RAG_HYBRID_WEIGHT=0 -e RAG_MAX_TOKENS=2048 -- node <root>/05-Knowledge/.tool/0.23.1/node_modules/mcp-local-rag/dist/index.js
+claude mcp add -s user knowledge -e BASE_DIR=<root> -e DB_PATH=<root>/04-Knowledge/.index/knowledge -e CACHE_DIR=<root>/04-Knowledge/.models -e MODEL_NAME=onnx-community/embeddinggemma-2-ONNX -e RAG_HYBRID_WEIGHT=0 -e RAG_MAX_TOKENS=2048 -- node <root>/04-Knowledge/.tool/0.23.1/node_modules/mcp-local-rag/dist/index.js
 ```
 
 Then keep agents from writing to the index; add to `~/.claude/settings.json`:
@@ -125,7 +128,7 @@ Then keep agents from writing to the index; add to `~/.claude/settings.json`:
 - Windows (PowerShell; the path to `pythonw.exe` from `where.exe pythonw`):
 
   ```powershell
-  $a = New-ScheduledTaskAction -Execute "pythonw.exe" -Argument '"<root>\05-Knowledge\watcher.py"'
+  $a = New-ScheduledTaskAction -Execute "pythonw.exe" -Argument '"<root>\04-Knowledge\watcher.py"'
   $t = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
   Register-ScheduledTask -TaskName "Knowledge Watcher" -Action $a -Trigger $t
   ```
@@ -134,7 +137,7 @@ Then keep agents from writing to the index; add to `~/.claude/settings.json`:
 
   ```ini
   [Service]
-  ExecStart=/usr/bin/python3 <root>/05-Knowledge/watcher.py
+  ExecStart=/usr/bin/python3 <root>/04-Knowledge/watcher.py
   Environment=PATH=<folder of node>:/usr/bin:/bin
   Restart=on-failure
 
@@ -147,7 +150,7 @@ Then keep agents from writing to the index; add to `~/.claude/settings.json`:
   ```
 
 - macOS: `~/Library/LaunchAgents/local.knowledge-watcher.plist` with `ProgramArguments`
-  `python3 <root>/05-Knowledge/watcher.py`, `EnvironmentVariables` `PATH` containing the
+  `python3 <root>/04-Knowledge/watcher.py`, `EnvironmentVariables` `PATH` containing the
   folder of `node`, `RunAtLoad` and `KeepAlive` true; then:
 
   ```bash
@@ -197,8 +200,8 @@ Use the drive letter and mount point that are in the guard's `"private"` list.
 ## 6. Skills
 
 ```bash
-git clone https://github.com/LordFisch1605/paul-skills-public.git 04-Skills/paul-skills-public
-claude plugin marketplace add ./04-Skills/paul-skills-public
+git clone https://github.com/LordFisch1605/paul-skills-public.git 03-Skills/paul-skills-public
+claude plugin marketplace add ./03-Skills/paul-skills-public
 claude plugin install paul-base@paul-skills-public -s user
 claude plugin install paul-dev@paul-skills-public -s user
 ```

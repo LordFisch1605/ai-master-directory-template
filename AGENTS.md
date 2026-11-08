@@ -1,7 +1,7 @@
 # AGENTS.md — AI master directory
 
-One directory for all AI-assisted work: tasks, projects, study, skills, and the knowledge base
-agents retrieve from. Where an area has its own `AGENTS.md`, that file wins inside it.
+One directory for all AI-assisted work: tasks, projects, and optionally skills and a knowledge
+base agents retrieve from. Where an area has its own `AGENTS.md`, that file wins inside it.
 
 How folders and files are named, numbered and laid out is in `CONVENTIONS.md`: follow it
 whenever you create something here. This file holds the rules that must not be broken.
@@ -18,9 +18,8 @@ every `AGENTS.md` off.
 | `02-Projects/01-Public/` | Projects that are or may become public; nothing private in them | one per project |
 | `02-Projects/02-Private/` | All other projects, numbered by age | one per project |
 | `02-Projects/03-External/` | Third-party repos you run or study (not numbered) | upstream's |
-| `03-Uni/` | Study material and papers | yes, one level down |
-| `04-Skills/` | Skills, as plugin marketplaces | one per marketplace |
-| `05-Knowledge/` | Knowledge base for retrieval (vector database), see its README | root repo |
+| `03-Skills/` | Skills, as plugin marketplaces (only if installed) | one per marketplace |
+| `04-Knowledge/` | Knowledge base for retrieval (vector database), see its README (only if installed) | root repo |
 | `91-Private/` | Sensitive personal data, ideally a VeraCrypt container — **no agent at all** | never in Git |
 
 ## 2. Access rules
@@ -45,7 +44,7 @@ other agents do not run it.
 
 ## 3. Git
 
-The root is a slim repo: the top-level files, `.claude/`, `setup/`, `05-Knowledge/`. Areas with
+The root is a slim repo: the top-level files, `.claude/`, `setup/`, `04-Knowledge/`. Areas with
 their own repo, and `91-Private/`, are in `.gitignore`, so nested repos stay independent and
 private data never reaches a remote. Commit messages describe the substance.
 

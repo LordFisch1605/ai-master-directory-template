@@ -1,7 +1,7 @@
 {
   "interval_seconds": 300,
   "package": "mcp-local-rag@0.23.1",
-  "cache_dir": "~/ai-master-directory/05-Knowledge/.models",
+  "cache_dir": "~/ai-master-directory/04-Knowledge/.models",
   "model": "onnx-community/embeddinggemma-2-ONNX",
   "device": "cpu",
   "batch_size": 16,
@@ -9,7 +9,6 @@
     "knowledge": {
       "roots": [
         "~/ai-master-directory/01-Tasks",
-        "~/ai-master-directory/03-Uni",
         "~/ai-master-directory/02-Projects"
       ],
       "ignore": [
@@ -22,15 +21,15 @@
         "**/cache/**",
         "**/.claude/**"
       ],
-      "db": "~/ai-master-directory/05-Knowledge/.index/knowledge",
+      "db": "~/ai-master-directory/04-Knowledge/.index/knowledge",
       "captions": {"model": "bonsai-2:9b", "max_edge": 1536}
     },
     "raw": {
       "discover": {
-        "under": ["~/ai-master-directory/01-Tasks", "~/ai-master-directory/03-Uni"],
+        "under": ["~/ai-master-directory/01-Tasks"],
         "dirs": ["_raw", "_rohdaten", "_derived"]
       },
-      "db": "~/ai-master-directory/05-Knowledge/.index/raw",
+      "db": "~/ai-master-directory/04-Knowledge/.index/raw",
       "report_unconverted": true
     }
   }

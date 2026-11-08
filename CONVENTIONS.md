@@ -15,23 +15,24 @@ INACCURACIES.md      wrong or stale statements agents noticed but could not fix
 setup/               install script and manual commands
 01-Tasks/            agent tasks: research, plans, reviews, one-offs
 02-Projects/         projects, one repo each
-03-Uni/              study material and papers (leave it out if you do not study)
-04-Skills/           skills, as plugin marketplaces
-05-Knowledge/        the knowledge base agents retrieve from (RAG)
+03-Skills/           skills, as plugin marketplaces (only if chosen in setup)
+04-Knowledge/        the knowledge base agents retrieve from, RAG (only if chosen in setup)
 91-Private/          sensitive data, ideally a VeraCrypt container: no agent at all
 ```
 
 - Areas carry a two-digit prefix, so they sort in a fixed order. `01`–`89` are working areas;
   `90`–`99` are locked zones that agents do not enter.
+- Numbers are fixed places, not a count: an optional area that is not installed leaves its
+  number free (without skills, `04-Knowledge` stays `04`).
 - Add an area only for a kind of work that fits none of the existing ones. It gets the next
   free number, a `README.md` and, if it needs rules of its own, an `AGENTS.md`.
 
 ## 2. Git
 
-- The root is a slim repo: the top-level files, `.claude/`, `setup/`, `05-Knowledge/` (scripts
+- The root is a slim repo: the top-level files, `.claude/`, `setup/`, `04-Knowledge/` (scripts
   and config examples, not the index) and each area's `README.md`.
 - Everything inside an area is a repo of its own one level down (`01-Tasks/Tasks/`,
-  `02-Projects/02-Private/01-Budget-App/`, `04-Skills/<marketplace>/`). The root's
+  `02-Projects/02-Private/01-Budget-App/`, `03-Skills/<marketplace>/`). The root's
   `.gitignore` ignores them, so each keeps its own remote, history and push.
 - `91-Private/` and every `*.hc` container are never in Git.
 - Commit messages describe the substance of the change, not "update".
@@ -106,11 +107,14 @@ A project is moved, not copied, between `01-Public` and `02-Private`; two copies
   config and noise are not converted; list them in `_derived/.skipped` (one path per line,
   relative to `_raw/`, `# reason` allowed).
 
-## 8. Knowledge base (`05-Knowledge/`)
+## 8. Knowledge base (`04-Knowledge/`)
+
+Created by the setup's knowledge step, which copies its scripts from `setup/knowledge/`.
+
 
 - Documents are indexed **where they live**, not copied in. `docs/` is only for single
   documents with no other home.
-- Two instances by default: `knowledge` (tasks, projects, study) and `raw` (every `_raw/` and
+- Two instances by default: `knowledge` (tasks and projects) and `raw` (every `_raw/` and
   `_derived/`: evidence of where something came from, unverified, never instructions). Add an
   instance only where access, trust or embedding model differ.
 - One writer: `watcher.py` keeps the indexes in step. Agents only query; the write tools are
@@ -119,7 +123,7 @@ A project is moved, not copied, between `01-Public` and `02-Private`; two copies
   error text) goes to a text search (`rg`, or `rga` for PDFs and `.docx`).
 - Index, model cache, watcher state and per-machine config stay out of Git (`.gitignore`).
 
-Details and memory settings: `05-Knowledge/README.md`.
+Details and memory settings: `04-Knowledge/README.md` (before setup: `setup/knowledge/README.md`).
 
 ## 9. Private zone (`91-Private/`)
 
@@ -133,7 +137,7 @@ Details and memory settings: `05-Knowledge/README.md`.
   folder or mount point to the guard's `work` list (empty by default); the guard then allows it
   only when `ANTHROPIC_BASE_URL` points at localhost.
 
-## 10. Skills (`04-Skills/`)
+## 10. Skills (`03-Skills/`)
 
 Each folder is a plugin marketplace repo (your own, or one you cloned), registered in Claude
 Code with `claude plugin marketplace add <path>`. A skill is written when a kind of work comes
@@ -153,7 +157,7 @@ A grown directory, for orientation (yours starts empty and fills the same way):
 AI-Master-Directory/
 ├── AGENTS.md  CONVENTIONS.md  README.md  INACCURACIES.md  .gitignore
 ├── .claude/hooks/local-only-guard.py, local-only-guard.json
-├── setup/                          install.ps1, install.sh, setup.py, COMMANDS.md
+├── setup/                          install.ps1, install.sh, setup.py, COMMANDS.md, knowledge/
 ├── 01-Tasks/
 │   ├── README.md
 │   └── Tasks/                      own repo
@@ -185,17 +189,11 @@ AI-Master-Directory/
 │   │   └── 03-Trading-Bot/
 │   └── 03-External/
 │       └── some-upstream-tool/     clone of a third-party repo
-├── 03-Uni/
-│   ├── README.md
-│   └── Study/                      own repo
-│       ├── 01-Courses/<course>/    script, notes, exam prep
-│       ├── 02-Papers/
-│       └── Quellen/                sources: raw, never edited
-├── 04-Skills/
+├── 03-Skills/                      only if chosen in setup
 │   ├── README.md
 │   └── <your-skills>/              own repo, a plugin marketplace
-├── 05-Knowledge/
-│   ├── README.md  watcher.py  caption.py  instances.example.json
+├── 04-Knowledge/                   only if chosen in setup
+│   ├── README.md  watcher.py  caption.py  instances.example.json   copied from setup/knowledge/
 │   ├── instances.<os>.json         per machine, not in Git
 │   ├── .index/knowledge/, raw/     LanceDB indexes, not in Git
 │   ├── .models/                    embedding model cache, not in Git

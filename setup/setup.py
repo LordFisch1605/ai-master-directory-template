@@ -19,7 +19,8 @@ OS = {"win32": "windows", "darwin": "macos"}.get(sys.platform, "linux")
 HOME = Path.home()
 SETTINGS = HOME / ".claude" / "settings.json"
 GUARD = ROOT / ".claude" / "hooks" / "local-only-guard.py"
-KNOWLEDGE = ROOT / "05-Knowledge"
+KNOWLEDGE = ROOT / "04-Knowledge"  # created only when the knowledge base is chosen
+SKILLS = ROOT / "03-Skills"  # created only when the skills are chosen
 SKILLS_REPO = "https://github.com/LordFisch1605/paul-skills-public.git"
 SKILLS_PLUGINS = ["paul-base", "paul-dev"]
 RAG_PACKAGE = "mcp-local-rag@0.23.1"
@@ -144,23 +145,17 @@ def step_prerequisites():
 
 def step_structure():
     for d in ["01-Tasks", "02-Projects/01-Public", "02-Projects/02-Private", "02-Projects/03-External",
-              "03-Uni", "04-Skills", "05-Knowledge", "91-Private"]:
+              "91-Private"]:
         (ROOT / d).mkdir(parents=True, exist_ok=True)
     if shutil.which("git") and not (ROOT / ".git").exists():
         run(["git", "init", str(ROOT)])
-    repos = [("01-Tasks/Tasks", "your tasks", ["01-Planning", "02-Research", "03-Reviews",
-                                                "04-One-Shots", "05-Idea-Design", "06-Trips"])]
-    if ask("Do you study? Then 03-Uni/Study is created as a repo too.", default=False):
-        repos.append(("03-Uni/Study", "your study material", ["01-Courses", "02-Papers", "Quellen"]))
-    for rel, what, folders in repos:
-        repo = ROOT / rel
-        if (repo / ".git").exists():
-            continue
-        for f in folders:
+    repo = ROOT / "01-Tasks" / "Tasks"
+    if not (repo / ".git").exists():
+        for f in ["01-Planning", "02-Research", "03-Reviews", "04-One-Shots", "05-Idea-Design", "06-Trips"]:
             (repo / f).mkdir(parents=True, exist_ok=True)
         agents = repo / "AGENTS.md"
         if not agents.exists():
-            agents.write_text(f"# AGENTS.md — {repo.name}\n\nRepo for {what}. Read `../../AGENTS.md` and "
+            agents.write_text("# AGENTS.md — Tasks\n\nRepo for your tasks. Read `../../AGENTS.md` and "
                               "`../../CONVENTIONS.md` first; rules that hold only here go below.\n",
                               encoding="utf-8")
         if shutil.which("git"):
@@ -203,7 +198,7 @@ def node_ok():
 
 
 def step_rag():
-    if not ask("Set up the knowledge base (RAG: local vector search over your tasks, projects and study)?"):
+    if not ask("Set up the knowledge base (RAG: local vector search over your tasks and projects)?"):
         return skipped.append("knowledge base")
     install("node")
     if not node_ok():
@@ -221,6 +216,9 @@ def step_rag():
         model = text("Embedding model (Hugging Face ONNX id)", EMBED_MODEL)
         batch = int(text("Embedding batch size (16 for 16 GB free, 4 for 8 GB, 1-2 for 4 GB)", "4"))
         captions = text("Ollama vision model for PDF figures (empty: none)", "") or None
+    KNOWLEDGE.mkdir(exist_ok=True)
+    for f in (ROOT / "setup" / "knowledge").iterdir():  # watcher, captioner, README, example config
+        shutil.copy2(f, KNOWLEDGE / f.name)
     if captions:
         if install("ollama"):
             run(["ollama", "pull", captions], check=False)
@@ -230,14 +228,14 @@ def step_rag():
         print("  pypdfium2 could not be installed; the watcher skips captions until it is (setup/COMMANDS.md).")
 
     p = lambda *parts: ROOT.joinpath(*parts).as_posix()
-    cfg = {"interval_seconds": 300, "package": RAG_PACKAGE, "cache_dir": p("05-Knowledge", ".models"),
+    cfg = {"interval_seconds": 300, "package": RAG_PACKAGE, "cache_dir": p("04-Knowledge", ".models"),
            "model": model, "device": "cpu", "batch_size": batch, "max_tokens": 2048, "instances": {
-               "knowledge": {"roots": [p("01-Tasks"), p("02-Projects"), p("03-Uni")],
+               "knowledge": {"roots": [p("01-Tasks"), p("02-Projects")],
                              "ignore": ["**/_raw/**", "**/_rohdaten/**", "**/_derived/**", "**/dist/**",
                                         "**/build/**", "**/.venv/**", "**/cache/**", "**/.claude/**"],
-                             "db": p("05-Knowledge", ".index", "knowledge")},
-               "raw": {"discover": {"under": [p("01-Tasks"), p("03-Uni")], "dirs": ["_raw", "_rohdaten", "_derived"]},
-                       "db": p("05-Knowledge", ".index", "raw"), "report_unconverted": True}}}
+                             "db": p("04-Knowledge", ".index", "knowledge")},
+               "raw": {"discover": {"under": [p("01-Tasks")], "dirs": ["_raw", "_rohdaten", "_derived"]},
+                       "db": p("04-Knowledge", ".index", "raw"), "report_unconverted": True}}}
     if captions:
         cfg["instances"]["knowledge"]["captions"] = {"model": captions, "max_edge": 1536}
     cfg_path = KNOWLEDGE / f"instances.{OS}.json"
@@ -245,7 +243,7 @@ def step_rag():
         cfg_path.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")
     cfg = json.loads(cfg_path.read_text(encoding="utf-8-sig"))
 
-    print("  Installing the search tool into 05-Knowledge/.tool/ ...")
+    print("  Installing the search tool into 04-Knowledge/.tool/ ...")
     spec = importlib.util.spec_from_file_location("watcher", KNOWLEDGE / "watcher.py")
     watcher = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(watcher)
@@ -340,9 +338,14 @@ def step_veracrypt():
 
 
 def step_skills():
-    if not ask(f"Clone the skill marketplace {SKILLS_REPO} into 04-Skills and install it in Claude Code?"):
+    if not ask(f"Clone the skill marketplace {SKILLS_REPO} into 03-Skills and install it in Claude Code?"):
         return skipped.append("skills")
-    target = ROOT / "04-Skills" / "paul-skills-public"
+    SKILLS.mkdir(exist_ok=True)
+    readme = SKILLS / "README.md"
+    if not readme.exists():
+        readme.write_text("# 03-Skills\n\nSkills, one plugin marketplace repo per folder "
+                          "(`../CONVENTIONS.md`, section 10).\n", encoding="utf-8")
+    target = SKILLS / "paul-skills-public"
     if (target / ".git").exists():
         run(["git", "-C", str(target), "pull", "--ff-only"], check=False)
     else:

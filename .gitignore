@@ -1,8 +1,7 @@
-# areas with their own repo
+# areas with their own repo (03-Skills and 04-Knowledge exist only if chosen in setup)
 01-Tasks/*
 02-Projects/*/*
-03-Uni/*
-04-Skills/*
+03-Skills/*
 !*/README.md
 !02-Projects/*/README.md
 
@@ -13,12 +12,12 @@
 __pycache__/
 
 # knowledge base: index, model cache, watcher state, OCR cache, per-machine config
-05-Knowledge/.index/
-05-Knowledge/.models/
-05-Knowledge/.state/
-05-Knowledge/.derived-cache/
-05-Knowledge/.tool/
-05-Knowledge/instances.json
-05-Knowledge/instances.windows.json
-05-Knowledge/instances.linux.json
-05-Knowledge/instances.macos.json
+04-Knowledge/.index/
+04-Knowledge/.models/
+04-Knowledge/.state/
+04-Knowledge/.derived-cache/
+04-Knowledge/.tool/
+04-Knowledge/instances.json
+04-Knowledge/instances.windows.json
+04-Knowledge/instances.linux.json
+04-Knowledge/instances.macos.json

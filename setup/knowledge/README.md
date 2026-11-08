@@ -1,4 +1,4 @@
-# 05-Knowledge
+# 04-Knowledge
 
 The knowledge base agents retrieve from (RAG): documents put here deliberately, chunked,
 embedded and stored in a vector database, queried by semantic search when a task needs them.

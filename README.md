@@ -1,7 +1,7 @@
 # AI master directory
 
 A folder structure for working with AI agents (built around Claude Code), and a setup that
-installs it on a fresh machine: one place for tasks, projects, study, skills and a local
+installs it on a fresh machine: one place for tasks and projects, optionally skills and a local
 retrieval knowledge base, plus a private zone no agent may touch.
 
 - `CONVENTIONS.md` — how everything here is named, numbered and laid out, with an example of a
@@ -12,13 +12,17 @@ retrieval knowledge base, plus a private zone no agent may touch.
 ```
 AGENTS.md  CONVENTIONS.md  README.md  INACCURACIES.md  .gitignore
 .claude/hooks/         access guard, registered machine-wide
-setup/                 install.ps1, install.sh, setup.py, COMMANDS.md
+setup/                 install.ps1, install.sh, setup.py, COMMANDS.md, knowledge/
 01-Tasks/              agent tasks: research, plans, reviews
 02-Projects/           01-Public, 02-Private, 03-External
-03-Uni/                study material and papers
-04-Skills/             skills (plugin marketplaces)
-05-Knowledge/          local vector search (RAG) over all of the above
 91-Private/            sensitive data in a VeraCrypt container — no agent
+```
+
+Added by the setup only if you choose them:
+
+```
+03-Skills/             skills (plugin marketplaces)
+04-Knowledge/          local vector search (RAG) over tasks and projects
 ```
 
 ## Install
@@ -33,25 +37,25 @@ The bootstrap installs Python 3 if it is missing and starts `setup/setup.py`, wh
 each step and each install:
 
 1. **Prerequisites** — Git and Claude Code, if missing.
-2. **Structure** — the area folders, a tasks repo (`01-Tasks/Tasks`), a study repo if you study.
+2. **Structure** — the area folders and a tasks repo (`01-Tasks/Tasks`).
 3. **Access guard** — where your private container is mounted; registers the guard hook in
    `~/.claude/settings.json` (a backup is kept as `settings.json.bak`).
 4. **Knowledge base** — whether you want it, whether to use the recommended models, and how
-   much RAM it may take (4, 8 or 16+ GB). Installs Node (and Ollama for figures in PDFs),
+   much RAM it may take (4, 8 or 16+ GB). Creates `04-Knowledge/`, installs Node (and Ollama for figures in PDFs),
    writes the config, registers the search servers in Claude Code, optionally builds the index
    and starts the watcher at login.
 5. **VeraCrypt** — installs it and creates `91-Private/Private.hc`; you set the password in
    VeraCrypt, the script never sees it.
-6. **Skills** — clones a public skill marketplace into `04-Skills/` and installs its plugins.
+6. **Skills** — clones a public skill marketplace into `03-Skills/` and installs its plugins.
 
 Re-running is safe; finished steps are detected. Every step by hand, for every OS:
 `setup/COMMANDS.md`.
 
 ## Knowledge: skills, MCP, RAG, memory
 
-- **Skills** — repeatable procedures → `04-Skills/`
+- **Skills** — repeatable procedures → `03-Skills/`
 - **MCP** — reaching outside systems → configured per machine, not stored here
-- **RAG** — knowledge someone wrote down, retrieved by semantic search → `05-Knowledge/`
+- **RAG** — knowledge someone wrote down, retrieved by semantic search → `04-Knowledge/`
 - **Memory** — what the agent learned itself → the agent's own memory
 
 ## What the guard does not do
