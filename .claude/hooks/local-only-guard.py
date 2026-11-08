@@ -50,17 +50,18 @@ def location_pattern(entry):
 
 
 def compile_locations(entries):
-    return re.compile("|".join(location_pattern(e) for e in entries), re.IGNORECASE)
+    # an empty list matches nothing; an empty pattern would match every path
+    return re.compile("|".join(location_pattern(e) for e in entries) or r"(?!)", re.IGNORECASE)
 
 
-WORK = compile_locations(CONFIG["work"])
-PRIVATE = compile_locations(CONFIG["private"])
+WORK = compile_locations(CONFIG.get("work", []))
+PRIVATE = compile_locations(CONFIG.get("private", []))
 RAW = re.compile(r"[\\/](" + "|".join(map(re.escape, CONFIG["raw_dirs"])) + r")[\\/]", re.IGNORECASE)
 
 
 def is_local():
     host = urlparse(os.environ.get("ANTHROPIC_BASE_URL", "")).hostname or ""
-    return host.lower() in CONFIG["local_hosts"]
+    return host.lower() in CONFIG.get("local_hosts", [])
 
 
 def block(reason):
@@ -106,7 +107,7 @@ def mounted(entry):
 
 
 def session(_event):
-    up = [e for e in CONFIG["work"] if mounted(e)]
+    up = [e for e in CONFIG.get("work", []) if mounted(e)]
     if up and not is_local():
         msg = (f"Work volume mounted ({', '.join(up)}) while a cloud-model session starts. "
                "Unmount it unless you need it now.")
