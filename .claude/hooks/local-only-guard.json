@@ -1,6 +1,6 @@
 {
   "local_hosts": ["localhost", "127.0.0.1", "::1"],
-  "work": ["W:", "~/work-vault", "90-Work"],
-  "private": ["91-Private"],
+  "work": [],
+  "private": ["P:", "~/private-vault", "91-Private"],
   "raw_dirs": ["_raw", "_rohdaten", "Quellen"]
 }

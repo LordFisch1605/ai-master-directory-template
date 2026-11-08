@@ -33,5 +33,5 @@ Suggested setup:
 - **Agents:** stdio MCP server, registered in Claude Code and in local-model clients.
 - **Layout:** documents in `docs/`, index in `.index/`, model cache in `.models/`; the last two
   stay out of Git.
-- **Work documents:** a second instance whose documents and index both live on `W:`,
-  registered only in the local-model client.
+- **Setup:** `python setup/setup.py` writes the config, registers the servers and the
+  autostart; the single steps are in `setup/COMMANDS.md`.

@@ -32,10 +32,6 @@
       },
       "db": "~/ai-master-directory/05-Knowledge/.index/raw",
       "report_unconverted": true
-    },
-    "work": {
-      "roots": ["~/work-vault/docs"],
-      "db": "~/work-vault/.index/work"
     }
   }
 }
