@@ -46,3 +46,16 @@ other agents do not run it.
 The root is a slim repo: this file, `README.md`, `.claude/`, `05-Knowledge/`. Areas with their
 own repo, and `90-Work/` and `91-Private/`, are in `.gitignore`, so nested repos stay
 independent and work data never reaches a remote. Commit messages describe the substance.
+
+## 4. Inaccuracies in `.md` files
+
+Do not hunt for them, but act on every one you notice while working: a wrong path, a stale
+count or version, a rule two files state differently, a pointer to something that moved.
+
+- **The fix is clear** (one right answer, e.g. the new path of a moved folder): fix it at once,
+  in its own commit, and name it to the owner in your handoff.
+- **Otherwise:** add a line to `INACCURACIES.md` at the root (date, file, what is off, what you
+  saw) and tell the owner. Do not guess a fix.
+
+This is how an imperfect migration gets cleaned up by the agents that come after it. Raw data
+(`_raw/` and the like) is never edited, not even to fix it.
