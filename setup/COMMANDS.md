@@ -90,7 +90,21 @@ On Windows: `Copy-Item -Recurse setup\knowledge 04-Knowledge`, then
 `Copy-Item 04-Knowledge\instances.example.json 04-Knowledge\instances.json`.
 Replace `~/ai-master-directory` with `<root>` in it. `interval_seconds` is how often the watcher
 checks for changed files (300 = every 5 minutes; an unchanged pass costs a few seconds of
-scanning). Memory per machine:
+scanning).
+
+Processor use per machine: `cpu_threads` caps the CPU threads of the embedding model and of the
+caption model (0 or missing: all); `priority` starts the indexing at `normal`, `low` or `idle`
+OS priority (Windows priority class, `nice` 10 or 19 on Linux/macOS; Ollama runs as its own
+service, so for captions only the thread cap applies). Measured on a 12-thread laptop CPU, the
+same batch took 19 s on all threads, 24 s on 4 and 67 s on 1.
+
+| Preset | `cpu_threads` | `priority` |
+|---|---|---|
+| background (setup default) | half of the machine's threads | `low` |
+| full speed | 0 | `normal` |
+| minimal | 2 | `idle` |
+
+Memory per machine:
 
 | RAM it may take | `batch_size` | `captions.model` |
 |---|---|---|

@@ -130,7 +130,8 @@ def png(page, max_edge):
 
 def ask(c, image, prompt, keep_alive="10m"):
     body = {"model": c["model"], "stream": False, "think": False, "keep_alive": keep_alive,
-            "options": {"temperature": 0, "num_ctx": 8192},  # page image + a full transcription
+            "options": {"temperature": 0, "num_ctx": 8192,  # page image + a full transcription
+                        **({"num_thread": c["num_thread"]} if c.get("num_thread") else {})},
             "messages": [{"role": "user", "content": prompt,
                           "images": [base64.b64encode(image).decode()] if image else []}]}
     req = urllib.request.Request(c["url"].rstrip("/") + "/api/chat", json.dumps(body).encode(),

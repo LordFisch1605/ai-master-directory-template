@@ -45,7 +45,8 @@ Ollama or VeraCrypt for the parts you choose), never an AI agent unless you ask 
    blocks reading and writing (or only writing) outside this directory and all system-wide
    package installs. For other agents the hooks stay as files to build their own from.
 4. **Knowledge base** — whether you want it, whether to use the recommended models, how much
-   RAM it may take (4, 8 or 16+ GB), and how often the watcher checks for changes. Creates
+   RAM it may take (4, 8 or 16+ GB), how much of the processor it may use (background, full
+   speed, minimal or custom), and how often the watcher checks for changes. Creates
    `04-Knowledge/`, installs Node (and Ollama for figures in PDFs), writes the MCP server config
    to `03-Agent/mcp/` (and registers it in Claude Code), optionally builds the index and starts
    the watcher at login.

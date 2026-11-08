@@ -258,6 +258,19 @@ def step_rag():
     i = choose("How often should the watcher look for changed files and update the index?",
                [t[0] for t in INTERVALS] + ["other (in seconds)"])
     interval = INTERVALS[i][1] if i < len(INTERVALS) else int(text("Seconds between checks", "300"))
+    cores = os.cpu_count() or 4
+    presets = [(f"background: {max(1, cores // 2)} of {cores} threads, low priority (the machine stays usable; "
+                "the first run takes longer)", max(1, cores // 2), "low"),
+               (f"full speed: all {cores} threads, normal priority (fastest; the machine gets sluggish meanwhile)",
+                0, "normal"),
+               ("minimal: 2 threads, lowest priority (runs only when the machine is idle)", 2, "idle")]
+    i = choose("How much of the processor may the models use while indexing?",
+               [p[0] for p in presets] + ["custom"])
+    if i < len(presets):
+        threads, priority = presets[i][1:]
+    else:
+        threads = int(text(f"CPU threads (1-{cores}, 0 for all)", str(max(1, cores // 2))))
+        priority = ["normal", "low", "idle"][choose("Priority", ["normal", "low", "idle"], default=2)]
     KNOWLEDGE.mkdir(exist_ok=True)
     for f in (ROOT / "setup" / "knowledge").iterdir():  # watcher, captioner, README, example config
         shutil.copy2(f, KNOWLEDGE / f.name)
@@ -271,7 +284,8 @@ def step_rag():
 
     p = lambda *parts: ROOT.joinpath(*parts).as_posix()
     cfg = {"interval_seconds": interval, "package": RAG_PACKAGE, "cache_dir": p("04-Knowledge", ".models"),
-           "model": model, "device": "cpu", "batch_size": batch, "max_tokens": 2048, "instances": {
+           "model": model, "device": "cpu", "batch_size": batch, "max_tokens": 2048,
+           "cpu_threads": threads, "priority": priority, "instances": {
                "knowledge": {"roots": [p("01-Tasks"), p("02-Projects")],
                              "ignore": ["**/_raw/**", "**/_rohdaten/**", "**/_derived/**", "**/dist/**",
                                         "**/build/**", "**/.venv/**", "**/cache/**", "**/.claude/**"],
@@ -320,7 +334,8 @@ def step_rag():
     if ask("Start the watcher at every login, so the indexes stay current?"):
         autostart()
     state["knowledge"] = True
-    done.append(f"knowledge base (batch {batch}, captions: {captions or 'off'}, check every {interval}s)")
+    done.append(f"knowledge base (batch {batch}, captions: {captions or 'off'}, check every {interval}s, "
+                f"{threads or 'all'} CPU threads at {priority} priority)")
 
 
 def autostart():

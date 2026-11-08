@@ -20,7 +20,9 @@ Suggested setup:
   `python3 watcher.py` at login. `device` picks `cpu` or the GPU backend: `dml` (Windows),
   `cuda` (Linux x64), `coreml` (macOS); `batch_size` (default 16) sets memory use per
   machine (about 16 for 16 GB free, 4 for 8 GB, 1–2 for 4 GB) and
-  `max_tokens` (default 2048, the same on every machine sharing an index) caps chunk length; `gpu_id` picks the DirectML adapter (the tool always takes adapter 0, often the
+  `max_tokens` (default 2048, the same on every machine sharing an index) caps chunk length;
+  `cpu_threads` (default: all) caps the CPU threads of the embedding and caption models and
+  `priority` (`normal`, `low`, `idle`) sets the OS priority of the indexing; `gpu_id` picks the DirectML adapter (the tool always takes adapter 0, often the
   integrated GPU), all three through a patched local install of the tool in `.tool/`. An index stores absolute paths, so it belongs to one
   OS; give each OS its own `db` paths.
 - **Figures and scans in PDFs:** `caption.py` (needs `pip install pypdfium2` and Ollama),

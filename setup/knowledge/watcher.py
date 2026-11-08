@@ -21,7 +21,9 @@ The tool runs from a local install in .tool/<version>/ (made on first use), patc
 "batch_size" sets the embedding batch (the tool fixes it at 16, too much for a small GPU) and
 "gpu_id" picks the DirectML adapter (it always takes adapter 0, often the integrated GPU), and
 "max_tokens" caps chunk length (the tool takes the model's window, 131,072 tokens for
-EmbeddingGemma 2, so one long code block became one chunk and needed gigabytes of memory).
+EmbeddingGemma 2, so one long code block became one chunk and needed gigabytes of memory), and
+"cpu_threads" caps the CPU threads of the embedding model (and of the caption model, through
+Ollama's num_thread). "priority" (normal, low, idle) starts the sync at that OS priority.
 Raw folders: JSON/HTML in a _raw/ (or _rohdaten/) with neither a Markdown version in the
 sibling _derived/ nor a line in _derived/.skipped is listed in .state/unconverted.txt.
 State and log live in .state/<os>/ (not in Git).
@@ -60,7 +62,20 @@ PATCHES = [
     "session_options.executionProviders ??= process.env.RAG_DML_DEVICE_ID ? executionProviders.map("
     "(p) => p === \"dml\" ? { name: \"dml\", deviceId: Number(process.env.RAG_DML_DEVICE_ID) } : p)"
     " : executionProviders;",
+), (  # applied after the one above, which leaves this text in place
+    "@huggingface/transformers/dist/transformers.node.mjs",
+    "session_options.executionProviders ??=",
+    "if (Number(process.env.RAG_THREADS) > 0) session_options.intraOpNumThreads ??= Number(process.env.RAG_THREADS);\n"
+    "    session_options.executionProviders ??=",
 )]
+# "priority" in the config -> how the sync process is started (Ollama runs as its own service, so
+# captions are limited by thread count only)
+PRIORITY = {"normal": {}}
+if OS == "windows":
+    PRIORITY.update(low={"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS},
+                    idle={"creationflags": subprocess.IDLE_PRIORITY_CLASS})
+else:
+    PRIORITY.update(low={"preexec_fn": lambda: os.nice(10)}, idle={"preexec_fn": lambda: os.nice(19)})
 
 
 def log(msg):
@@ -195,7 +210,7 @@ def sync(name, inst, cfg, roots):
     db.mkdir(parents=True, exist_ok=True)
     env = {k: v for k, v in os.environ.items()
            if k not in ("BASE_DIR", "IGNORE_PATHS", "RAG_DEVICE", "RAG_BATCH_SIZE", "RAG_DML_DEVICE_ID",
-                         "RAG_MAX_TOKENS")}
+                         "RAG_MAX_TOKENS", "RAG_THREADS")}
     # folders the snapshot skips must be kept out of the index too, or changes there go unseen
     env["IGNORE_PATHS"] = json.dumps(inst.get("ignore", []) + [f"**/{d}/**" for d in sorted(SKIP_DIRS)])
     env.update({
@@ -211,11 +226,14 @@ def sync(name, inst, cfg, roots):
     })
     if "gpu_id" in cfg:  # DirectML adapter index, as in Task Manager's "GPU N"
         env["RAG_DML_DEVICE_ID"] = str(cfg["gpu_id"])
+    if cfg.get("cpu_threads"):  # CPU threads the embedding model may use; unset or 0: all
+        env["RAG_THREADS"] = str(cfg["cpu_threads"])
     cmd = tool(cfg) + ["sync"]
     if inst.get("visual"):
         cmd += ["--visual", "--visual-quality", inst["visual"]]
     started = time.time()
-    r = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    r = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       **PRIORITY[cfg.get("priority", "normal")])
     tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
     log(f"{name}: sync exit {r.returncode} after {time.time() - started:.0f}s | " + " | ".join(tail))
     return r.returncode == 0
@@ -261,6 +279,8 @@ def run_pass(cfg):
                 sys.path.insert(0, str(HERE))
             import caption
             pats = [glob_regex(p) for p in inst.get("ignore", [])]
+            if cfg.get("cpu_threads"):  # the same CPU limit for the caption model
+                inst = dict(inst, captions=dict({"num_thread": cfg["cpu_threads"]}, **inst["captions"]))
             caption.run(name, inst, roots, HERE, expand, walk,
                         lambda root, f: any(p.match(f.relative_to(root).as_posix()) for p in pats), log)
             roots = sorted(set(roots + [caption.cache_root(HERE, name, inst, expand)]))

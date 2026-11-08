@@ -5,6 +5,8 @@
   "model": "onnx-community/embeddinggemma-2-ONNX",
   "device": "cpu",
   "batch_size": 16,
+  "cpu_threads": 4,
+  "priority": "low",
   "instances": {
     "knowledge": {
       "roots": [
