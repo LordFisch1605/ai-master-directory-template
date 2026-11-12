@@ -59,6 +59,9 @@ The root is a slim repo: the top-level files, `setup/`, `03-Agent/` (without the
 and `04-Knowledge/` (without the index). Areas with their own repo, and `91-Private/`, are in
 `.gitignore`, so nested repos stay independent and private data never reaches a remote. Commit messages describe the substance.
 
+A new repo inside the tree gets an `AGENTS.md` whose first paragraph names this file by
+relative path, since some tools stop at the repo's root.
+
 ## 4. Inaccuracies in `.md` files
 
 Do not hunt for them, but act on every one you notice while working: a wrong path, a stale
