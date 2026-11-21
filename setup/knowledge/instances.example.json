@@ -11,7 +11,8 @@
     "knowledge": {
       "roots": [
         "~/ai-master-directory/01-Tasks",
-        "~/ai-master-directory/02-Projects"
+        "~/ai-master-directory/02-Projects",
+        "~/ai-master-directory/setup/knowledge/docs"
       ],
       "ignore": [
         "**/_raw/**",
