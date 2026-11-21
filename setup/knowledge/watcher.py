@@ -26,7 +26,9 @@ EmbeddingGemma 2, so one long code block became one chunk and needed gigabytes o
 Ollama's num_thread). "priority" (normal, low, idle) starts the sync at that OS priority.
 Raw folders: JSON/HTML in a _raw/ (or _rohdaten/) with neither a Markdown version in the
 sibling _derived/ nor a line in _derived/.skipped is listed in .state/unconverted.txt.
-State and log live in .state/<os>/ (not in Git).
+State and log live in .state/<os>/ (not in Git). heartbeat.json there says when the watcher
+last showed a sign of life and what it was doing (idle, captions or sync of an instance), so a
+quiet pass, which logs nothing, still shows that it runs (read by the master server's status).
 """
 import hashlib
 import json
@@ -87,6 +89,13 @@ def log(msg):
         path.replace(STATE / "watcher.log.1")
     with path.open("a", encoding="utf-8") as f:
         f.write(line + "\n")
+
+
+def beat(phase, interval):
+    STATE.mkdir(parents=True, exist_ok=True)
+    (STATE / "heartbeat.json").write_text(json.dumps({
+        "time": datetime.now().isoformat(timespec="seconds"), "pid": os.getpid(),
+        "phase": phase, "interval_seconds": interval}), encoding="utf-8")
 
 
 def expand(p):
@@ -266,6 +275,7 @@ def run_pass(cfg):
     state = json.loads(state_file.read_text(encoding="utf-8")) if state_file.exists() else {}
     open_items = []
     for name, inst in cfg["instances"].items():
+        beat(f"check {name}", cfg["interval_seconds"])
         roots = roots_of(inst)
         missing = [str(r) for r in roots if not r.is_dir()]
         if missing:
@@ -275,6 +285,7 @@ def run_pass(cfg):
             continue
         state.pop(f"{name}:missing", None)
         if inst.get("captions"):  # figure captions first, so the sync below indexes them
+            beat(f"captions {name}", cfg["interval_seconds"])
             if str(HERE) not in sys.path:
                 sys.path.insert(0, str(HERE))
             import caption
@@ -301,6 +312,7 @@ def run_pass(cfg):
             continue
         try:
             log(f"{name}: change detected ({count} files in {len(roots)} roots), syncing")
+            beat(f"sync {name}", cfg["interval_seconds"])
             if sync(name, inst, cfg, roots):
                 state[name] = digest
         finally:
@@ -327,6 +339,7 @@ def main():
             run_pass(cfg)
         except Exception as exc:  # keep watching; the next pass may succeed
             log(f"pass failed: {exc!r}")
+        beat("idle", cfg["interval_seconds"])
         if once:
             return
         time.sleep(cfg["interval_seconds"])
