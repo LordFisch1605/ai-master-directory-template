@@ -26,6 +26,9 @@ EmbeddingGemma 2, so one long code block became one chunk and needed gigabytes o
 Ollama's num_thread). "priority" (normal, low, idle) starts the sync at that OS priority.
 Raw folders: JSON/HTML in a _raw/ (or _rohdaten/) with neither a Markdown version in the
 sibling _derived/ nor a line in _derived/.skipped is listed in .state/unconverted.txt.
+"backend": "rag" (default "mcp-local-rag") syncs with the own indexer of 02-Projects/02-Private/
+35-rag instead (embeddings through Ollama; index in "rag_db", default .index/rag-<instance>);
+the tool settings above then do not apply, "ollama" sets OLLAMA_HOST.
 State and log live in .state/<os>/ (not in Git). heartbeat.json there says when the watcher
 last showed a sign of life and what it was doing (idle, captions or sync of an instance), so a
 quiet pass, which logs nothing, still shows that it runs (read by the master server's status).
@@ -218,7 +221,53 @@ def tool(cfg):
     return [shutil.which("node") or "node", str(entry)]
 
 
+def backend(cfg):
+    """"backend" in the config: "mcp-local-rag" (default) or "rag", the own indexer in
+    02-Projects/02-Private/35-rag (private; embeddings through Ollama, one model for everyone)."""
+    b = cfg.get("backend", "mcp-local-rag")
+    if b not in ("mcp-local-rag", "rag"):
+        raise ValueError(f"backend must be 'mcp-local-rag' or 'rag', not {b!r}")
+    return b
+
+
+def index_db(name, inst, cfg):
+    """The index folder the backend uses: "db" for mcp-local-rag, "rag_db" (default: rag-<name>
+    beside it) for rag, so both can exist side by side during a switch."""
+    if backend(cfg) == "rag":
+        return expand(inst["rag_db"]) if inst.get("rag_db") else expand(inst["db"]).parent / f"rag-{name}"
+    return expand(inst["db"])
+
+
+def rag_command(cfg):
+    """rag.py and the Python of its own venv (lancedb lives there, not in this script)."""
+    home = expand(cfg["rag_dir"]) if cfg.get("rag_dir") else HERE.parent / "02-Projects" / "02-Private" / "35-rag"
+    python = home / ".venv" / ("Scripts/python.exe" if OS == "windows" else "bin/python")
+    return [str(python), str(home / "rag.py")]
+
+
+def sync_rag(name, inst, cfg, roots):
+    db = index_db(name, inst, cfg)
+    cmd = rag_command(cfg) + ["sync", "--db", str(db)]
+    for r in roots:
+        cmd += ["--root", str(r)]
+    for g in inst.get("ignore", []) + [f"**/{d}/**" for d in sorted(SKIP_DIRS)]:
+        cmd += ["--ignore", g]
+    for e in sorted(INDEXABLE):  # the same file types the snapshot watches
+        cmd += ["--ext", e]
+    env = dict(os.environ)
+    if cfg.get("ollama"):
+        env["OLLAMA_HOST"] = cfg["ollama"]
+    started = time.time()
+    r = subprocess.run(cmd, env=env, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                       **PRIORITY[cfg.get("priority", "normal")])
+    tail = (r.stdout + r.stderr).strip().splitlines()[-3:]
+    log(f"{name}: rag sync exit {r.returncode} after {time.time() - started:.0f}s | " + " | ".join(tail))
+    return r.returncode == 0
+
+
 def sync(name, inst, cfg, roots):
+    if backend(cfg) == "rag":
+        return sync_rag(name, inst, cfg, roots)
     db = expand(inst["db"])
     db.mkdir(parents=True, exist_ok=True)
     env = {k: v for k, v in os.environ.items()
@@ -307,9 +356,10 @@ def run_pass(cfg):
                 log(f"{name}: {len(bad)} file name(s) look mangled (UTF-8 read as CP437): "
                     + ", ".join(bad[:5]))
             state[f"{name}:mangled"] = bad
-        if state.get(name) == digest:
+        key = name if backend(cfg) == "mcp-local-rag" else f"rag:{name}"  # each index its own state
+        if state.get(key) == digest:
             continue
-        lock = expand(inst["db"]).with_suffix(".lock")
+        lock = index_db(name, inst, cfg).with_suffix(".lock")
         lock.parent.mkdir(parents=True, exist_ok=True)
         if not acquire(lock):
             log(f"{name}: index busy (lock {lock}), next pass")
@@ -318,7 +368,7 @@ def run_pass(cfg):
             log(f"{name}: change detected ({count} files in {len(roots)} roots), syncing")
             beat(f"sync {name}", cfg["interval_seconds"])
             if sync(name, inst, cfg, roots):
-                state[name] = digest
+                state[key] = digest
         finally:
             lock.unlink(missing_ok=True)
     state_file.write_text(json.dumps(state, indent=1), encoding="utf-8")
