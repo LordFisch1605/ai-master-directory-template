@@ -73,9 +73,13 @@ PATCHES = [
 # "priority" in the config -> how the sync process is started (Ollama runs as its own service, so
 # captions are limited by thread count only)
 PRIORITY = {"normal": {}}
+NO_WINDOW = {}
 if OS == "windows":
-    PRIORITY.update(low={"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS},
-                    idle={"creationflags": subprocess.IDLE_PRIORITY_CLASS})
+    # pythonw has no console, so a console program it starts (node, npm) would open its own window
+    NO_WINDOW = {"creationflags": subprocess.CREATE_NO_WINDOW}
+    PRIORITY.update(normal=dict(NO_WINDOW),
+                    low={"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS | subprocess.CREATE_NO_WINDOW},
+                    idle={"creationflags": subprocess.IDLE_PRIORITY_CLASS | subprocess.CREATE_NO_WINDOW})
 else:
     PRIORITY.update(low={"preexec_fn": lambda: os.nice(10)}, idle={"preexec_fn": lambda: os.nice(19)})
 
@@ -202,7 +206,7 @@ def tool(cfg):
         log(f"installing {cfg['package']} into {TOOL / version}")
         subprocess.run([shutil.which("npm") or "npm", "install", "--prefix", str(TOOL / version),
                         "--no-save", "--no-audit", "--no-fund", cfg["package"]], check=True,
-                       capture_output=True)
+                       capture_output=True, **NO_WINDOW)
     for rel, old, new in PATCHES:
         f = modules / rel
         text = f.read_text(encoding="utf-8")
